@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::discord::ids::{
     Id,
-    marker::{ChannelMarker, GuildMarker, MessageMarker},
+    marker::{ChannelMarker, GuildMarker, MessageMarker, UserMarker},
 };
 
 use crate::discord::{AppEvent, ForumPostArchiveState};
@@ -36,6 +36,12 @@ pub(super) struct ForumPostRequestTarget {
 pub(super) struct MentionMemberSearchTarget {
     pub(super) guild_id: Id<GuildMarker>,
     pub(super) query: String,
+}
+
+#[derive(Default)]
+pub(super) struct MessageAuthorMemberRequests {
+    requested: HashMap<MessageAuthorMemberRequestKey, Instant>,
+    requested_order: VecDeque<MessageAuthorMemberRequestKey>,
 }
 
 #[derive(Default)]
@@ -219,6 +225,72 @@ impl PinnedMessageRequests {
     }
 }
 
+impl MessageAuthorMemberRequests {
+    const REQUEST_TTL: Duration = Duration::from_secs(30);
+    const MAX_REQUESTED: usize = 4096;
+
+    pub(super) fn record_event(&mut self, event: &AppEvent) {
+        match event {
+            AppEvent::GuildMemberUpsert { guild_id, member }
+            | AppEvent::GuildMemberAdd { guild_id, member } => {
+                self.remove((*guild_id, member.user_id));
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn next(
+        &mut self,
+        missing: Vec<(Id<GuildMarker>, Vec<Id<UserMarker>>)>,
+        now: Instant,
+    ) -> Vec<(Id<GuildMarker>, Vec<Id<UserMarker>>)> {
+        self.prune_requested(now);
+
+        let mut requests = Vec::new();
+        for (guild_id, user_ids) in missing {
+            let fresh_user_ids = user_ids
+                .into_iter()
+                .filter(|user_id| self.insert_requested((guild_id, *user_id), now))
+                .collect::<Vec<_>>();
+            if !fresh_user_ids.is_empty() {
+                requests.push((guild_id, fresh_user_ids));
+            }
+        }
+        requests
+    }
+
+    fn insert_requested(&mut self, key: MessageAuthorMemberRequestKey, now: Instant) -> bool {
+        if self.requested.contains_key(&key) {
+            return false;
+        }
+        self.requested.insert(key, now);
+        self.requested_order.push_back(key);
+        self.prune_requested(now);
+        true
+    }
+
+    fn remove(&mut self, key: MessageAuthorMemberRequestKey) {
+        self.requested.remove(&key);
+        self.requested_order
+            .retain(|requested_key| requested_key != &key);
+    }
+
+    fn prune_requested(&mut self, now: Instant) {
+        self.requested.retain(|_, requested_at| {
+            now.checked_duration_since(*requested_at)
+                .is_none_or(|age| age <= Self::REQUEST_TTL)
+        });
+        self.requested_order
+            .retain(|key| self.requested.contains_key(key));
+        while self.requested.len() > Self::MAX_REQUESTED {
+            let Some(oldest) = self.requested_order.pop_front() else {
+                break;
+            };
+            self.requested.remove(&oldest);
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct MemberRequests {
     requests: HashSet<Id<GuildMarker>>,
@@ -355,6 +427,7 @@ impl MentionMemberSearchRequests {
 }
 
 type MentionMemberSearchKey = (Id<GuildMarker>, String);
+type MessageAuthorMemberRequestKey = (Id<GuildMarker>, Id<UserMarker>);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct PendingMentionMemberSearch {
@@ -531,11 +604,12 @@ enum PinnedMessageRequestState {
 mod tests {
     use crate::discord::ids::Id;
 
-    use crate::discord::{AppEvent, ChannelInfo, ForumPostArchiveState};
+    use crate::discord::{AppEvent, ChannelInfo, ForumPostArchiveState, MemberInfo};
 
     use super::{
         ForumPostRequestTarget, ForumPostRequests, HistoryRequests, MemberRequests,
-        MentionMemberSearchRequests, MentionMemberSearchTarget, ThreadPreviewRequests,
+        MentionMemberSearchRequests, MentionMemberSearchTarget, MessageAuthorMemberRequests,
+        ThreadPreviewRequests,
     };
 
     #[test]
@@ -729,6 +803,17 @@ mod tests {
         }
     }
 
+    fn member(user_id: Id<crate::discord::ids::marker::UserMarker>) -> MemberInfo {
+        MemberInfo {
+            user_id,
+            display_name: "neo".to_owned(),
+            username: Some("neo".to_owned()),
+            is_bot: false,
+            avatar_url: None,
+            role_ids: Vec::new(),
+        }
+    }
+
     #[test]
     fn member_request_is_sent_once_per_active_guild() {
         let mut requests = MemberRequests::default();
@@ -751,6 +836,40 @@ mod tests {
         requests.remove(guild_id);
 
         assert_eq!(requests.next(Some(guild_id)), Some(guild_id));
+    }
+
+    #[test]
+    fn message_author_member_request_dedupes_until_member_arrives_or_ttl_expires() {
+        let mut requests = MessageAuthorMemberRequests::default();
+        let guild_id = Id::new(1);
+        let user_id = Id::new(10);
+        let other_user_id = Id::new(20);
+        let now = std::time::Instant::now();
+
+        assert_eq!(
+            requests.next(vec![(guild_id, vec![user_id, other_user_id])], now),
+            vec![(guild_id, vec![user_id, other_user_id])]
+        );
+        assert_eq!(
+            requests.next(vec![(guild_id, vec![user_id, other_user_id])], now),
+            Vec::new()
+        );
+
+        requests.record_event(&AppEvent::GuildMemberUpsert {
+            guild_id,
+            member: member(user_id),
+        });
+        assert_eq!(
+            requests.next(vec![(guild_id, vec![user_id, other_user_id])], now),
+            vec![(guild_id, vec![user_id])]
+        );
+
+        let retry_at =
+            now + MessageAuthorMemberRequests::REQUEST_TTL + std::time::Duration::from_millis(1);
+        assert_eq!(
+            requests.next(vec![(guild_id, vec![other_user_id])], retry_at),
+            vec![(guild_id, vec![other_user_id])]
+        );
     }
 
     #[test]

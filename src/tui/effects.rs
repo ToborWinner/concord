@@ -21,7 +21,10 @@ use super::{
         AvatarImageCache, EmojiImageCache, ImagePreviewCache, ImagePreviewDecodeResult,
         spawn_image_preview_decode,
     },
-    requests::{ForumPostRequests, HistoryRequests, PinnedMessageRequests, ThreadPreviewRequests},
+    requests::{
+        ForumPostRequests, HistoryRequests, MessageAuthorMemberRequests, PinnedMessageRequests,
+        ThreadPreviewRequests,
+    },
     state::{DashboardState, DesktopNotification},
 };
 
@@ -36,6 +39,7 @@ pub(super) struct EffectContext<'a> {
     pub(super) history_requests: &'a mut HistoryRequests,
     pub(super) forum_post_requests: &'a mut ForumPostRequests,
     pub(super) pinned_message_requests: &'a mut PinnedMessageRequests,
+    pub(super) message_author_member_requests: &'a mut MessageAuthorMemberRequests,
     pub(super) thread_preview_requests: &'a mut ThreadPreviewRequests,
     pub(super) preview_decode_tx: &'a mpsc::UnboundedSender<ImagePreviewDecodeResult>,
 }
@@ -77,8 +81,9 @@ pub(super) fn process_effect_event(
     ctx: &mut EffectContext<'_>,
 ) -> EffectProcessingOutcome {
     let outcome = EffectProcessingOutcome::processed(&event);
-    let message_history = match &event {
-        AppEvent::MessageHistoryLoaded { messages, .. } => Some(messages.clone()),
+    let member_hydration_messages = match &event {
+        AppEvent::MessageHistoryLoaded { messages, .. }
+        | AppEvent::PinnedMessagesLoaded { messages, .. } => Some(messages.clone()),
         _ => None,
     };
     if let Some(notification) = ctx.state.desktop_notification_for_event(&event) {
@@ -95,15 +100,19 @@ pub(super) fn process_effect_event(
     ctx.history_requests.record_event(&event);
     ctx.forum_post_requests.record_event(&event);
     ctx.pinned_message_requests.record_event(&event);
+    ctx.message_author_member_requests.record_event(&event);
     ctx.thread_preview_requests.record_event(&event);
     if matches!(event, AppEvent::GatewayClosed) {
         handle_gateway_closed(ctx.state);
     } else {
         ctx.state.push_effect(event);
     }
-    if let Some(messages) = message_history {
-        ctx.state
-            .enqueue_missing_message_author_member_requests(&messages);
+    if let Some(messages) = member_hydration_messages {
+        let missing = ctx.state.missing_message_author_member_requests(&messages);
+        let requests = ctx
+            .message_author_member_requests
+            .next(missing, std::time::Instant::now());
+        ctx.state.enqueue_message_author_member_requests(requests);
     }
     outcome
 }
@@ -422,6 +431,7 @@ mod tests {
         let mut history_requests = HistoryRequests::default();
         let mut forum_post_requests = ForumPostRequests::default();
         let mut pinned_message_requests = PinnedMessageRequests::default();
+        let mut message_author_member_requests = MessageAuthorMemberRequests::default();
         let mut thread_preview_requests = ThreadPreviewRequests::default();
         let (preview_decode_tx, _preview_decode_rx) = mpsc::unbounded_channel();
         let mut ctx = EffectContext {
@@ -432,6 +442,7 @@ mod tests {
             history_requests: &mut history_requests,
             forum_post_requests: &mut forum_post_requests,
             pinned_message_requests: &mut pinned_message_requests,
+            message_author_member_requests: &mut message_author_member_requests,
             thread_preview_requests: &mut thread_preview_requests,
             preview_decode_tx: &preview_decode_tx,
         };

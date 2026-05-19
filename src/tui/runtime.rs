@@ -28,8 +28,8 @@ use super::{
     },
     requests::{
         ForumPostRequestTarget, ForumPostRequests, HistoryRequests, MemberRequests,
-        MentionMemberSearchRequests, MentionMemberSearchTarget, PinnedMessageRequests,
-        ThreadPreviewRequests,
+        MentionMemberSearchRequests, MentionMemberSearchTarget, MessageAuthorMemberRequests,
+        PinnedMessageRequests, ThreadPreviewRequests,
     },
     state::DashboardState,
     ui,
@@ -65,6 +65,7 @@ pub(super) async fn run_dashboard(
     let mut history_requests = HistoryRequests::default();
     let mut forum_post_requests = ForumPostRequests::default();
     let mut pinned_message_requests = PinnedMessageRequests::default();
+    let mut message_author_member_requests = MessageAuthorMemberRequests::default();
     let mut member_requests = MemberRequests::default();
     let mut mention_member_search_requests = MentionMemberSearchRequests::default();
     let mut thread_preview_requests = ThreadPreviewRequests::default();
@@ -244,6 +245,7 @@ pub(super) async fn run_dashboard(
                             history_requests: &mut history_requests,
                             forum_post_requests: &mut forum_post_requests,
                             pinned_message_requests: &mut pinned_message_requests,
+                            message_author_member_requests: &mut message_author_member_requests,
                             thread_preview_requests: &mut thread_preview_requests,
                             preview_decode_tx: &preview_decode_tx,
                         };
@@ -290,6 +292,7 @@ pub(super) async fn run_dashboard(
                             history_requests: &mut history_requests,
                             forum_post_requests: &mut forum_post_requests,
                             pinned_message_requests: &mut pinned_message_requests,
+                            message_author_member_requests: &mut message_author_member_requests,
                             thread_preview_requests: &mut thread_preview_requests,
                             preview_decode_tx: &preview_decode_tx,
                         };

@@ -341,8 +341,18 @@ impl DashboardState {
             .collect()
     }
 
+    #[cfg(test)]
     pub fn enqueue_missing_message_author_member_requests(&mut self, messages: &[MessageInfo]) {
-        for (guild_id, user_ids) in self.missing_message_author_member_requests(messages) {
+        self.enqueue_message_author_member_requests(
+            self.missing_message_author_member_requests(messages),
+        );
+    }
+
+    pub fn enqueue_message_author_member_requests(
+        &mut self,
+        requests: Vec<(Id<GuildMarker>, Vec<Id<UserMarker>>)>,
+    ) {
+        for (guild_id, user_ids) in requests {
             for chunk in user_ids.chunks(MAX_MESSAGE_AUTHOR_MEMBER_REQUEST_USERS) {
                 self.pending_commands
                     .push_back(AppCommand::LoadGuildMembersByIds {

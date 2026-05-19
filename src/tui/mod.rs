@@ -75,7 +75,8 @@ mod tests {
             should_suppress_image_redraw_for_signature_change, visible_dashboard_signature,
         },
         requests::{
-            ForumPostRequests, HistoryRequests, PinnedMessageRequests, ThreadPreviewRequests,
+            ForumPostRequests, HistoryRequests, MessageAuthorMemberRequests, PinnedMessageRequests,
+            ThreadPreviewRequests,
         },
     };
     use crate::tui::state::{DashboardState, FocusPane};
@@ -89,6 +90,7 @@ mod tests {
         let mut history_requests = HistoryRequests::default();
         let mut forum_post_requests = ForumPostRequests::default();
         let mut pinned_message_requests = PinnedMessageRequests::default();
+        let mut message_author_member_requests = MessageAuthorMemberRequests::default();
         let mut thread_preview_requests = ThreadPreviewRequests::default();
         let (preview_decode_tx, _preview_decode_rx) = tokio::sync::mpsc::unbounded_channel();
         let mut deferred_effects = VecDeque::new();
@@ -102,6 +104,7 @@ mod tests {
                 history_requests: &mut history_requests,
                 forum_post_requests: &mut forum_post_requests,
                 pinned_message_requests: &mut pinned_message_requests,
+                message_author_member_requests: &mut message_author_member_requests,
                 thread_preview_requests: &mut thread_preview_requests,
                 preview_decode_tx: &preview_decode_tx,
             };
@@ -131,6 +134,7 @@ mod tests {
                 history_requests: &mut history_requests,
                 forum_post_requests: &mut forum_post_requests,
                 pinned_message_requests: &mut pinned_message_requests,
+                message_author_member_requests: &mut message_author_member_requests,
                 thread_preview_requests: &mut thread_preview_requests,
                 preview_decode_tx: &preview_decode_tx,
             };
