@@ -217,45 +217,45 @@ impl DashboardState {
             }
         }
 
-        // Collect channels with active notifications into a dedicated top section.
-        // Muted channels are intentionally excluded so the section reflects what
-        // would actually ping the user.
-        let mut notifications: Vec<ChannelSwitcherItem> = base
-            .iter()
-            .filter(|item| {
-                item.guild_id
-                    .is_none_or(|guild_id| !self.guild_notification_muted(guild_id))
-                    && self.sidebar_channel_unread(item.channel_id) != ChannelUnreadState::Seen
-            })
-            .cloned()
-            .collect();
-        for item in notifications.iter_mut() {
-            item.group_label = "Notifications".to_owned();
-            item.parent_label = item.guild_name.clone();
-            item.depth = 0;
-        }
-        notifications.sort_by_key(|item| match item.unread {
-            ChannelUnreadState::Mentioned(_) => 0,
-            ChannelUnreadState::Notified(_) => 1,
-            ChannelUnreadState::Unread => 2,
-            ChannelUnreadState::Seen => 3,
-        });
-
-        // Shift base group_order so the notifications section sorts above them
-        // in filtered (scored) mode.
-        for item in base.iter_mut() {
-            item.group_order = item.group_order.saturating_add(1);
-        }
-        for item in notifications.iter_mut() {
-            item.group_order = 0;
+        let recent = self.recent_channel_switcher_items(&base);
+        if !recent.is_empty() {
+            for item in base.iter_mut() {
+                item.group_order = item.group_order.saturating_add(1);
+            }
         }
 
-        let mut items = notifications;
+        let mut items = recent;
         items.extend(base);
         for (index, item) in items.iter_mut().enumerate() {
             item.original_index = index;
         }
         items
+    }
+
+    fn recent_channel_switcher_items(
+        &self,
+        base: &[ChannelSwitcherItem],
+    ) -> Vec<ChannelSwitcherItem> {
+        let mut recent = Vec::new();
+        let mut seen = HashSet::new();
+        for channel_id in &self.recent_channel_ids {
+            if Some(*channel_id) == self.active_channel_id {
+                continue;
+            }
+            if !seen.insert(*channel_id) {
+                continue;
+            }
+            let Some(item) = base.iter().find(|item| item.channel_id == *channel_id) else {
+                continue;
+            };
+            let mut item = item.clone();
+            item.group_label = "Recent Channels".to_owned();
+            item.parent_label = item.guild_name.clone();
+            item.depth = 0;
+            item.group_order = 0;
+            recent.push(item);
+        }
+        recent
     }
 
     fn push_direct_message_switcher_items(&self, items: &mut Vec<ChannelSwitcherItem>) {
@@ -406,21 +406,72 @@ fn push_channel_switcher_item(
     });
 }
 
-fn channel_switcher_match_score(item: &ChannelSwitcherItem, query: &str) -> Option<FuzzyScore> {
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum ChannelSwitcherMatchQuality {
+    ChannelExact,
+    ChannelPrefix,
+    ChannelFuzzy,
+    Context,
+}
+
+fn channel_switcher_match_score(
+    item: &ChannelSwitcherItem,
+    query: &str,
+) -> Option<(ChannelSwitcherMatchQuality, FuzzyScore)> {
+    let query = query.trim();
+    if let Some(prefix) = channel_switcher_query_label_prefix(query)
+        && !item.channel_label.starts_with(prefix)
+    {
+        return None;
+    }
+    let channel_query = channel_switcher_search_channel_name(query);
+    let channel_name = channel_switcher_search_channel_name(&item.channel_label);
+    if let Some(score) = fuzzy_text_score(channel_name, channel_query) {
+        let channel_name = channel_name.to_lowercase();
+        let channel_query = channel_query.to_lowercase();
+        let quality = if channel_name == channel_query {
+            ChannelSwitcherMatchQuality::ChannelExact
+        } else if channel_name.starts_with(&channel_query) {
+            ChannelSwitcherMatchQuality::ChannelPrefix
+        } else {
+            ChannelSwitcherMatchQuality::ChannelFuzzy
+        };
+        return Some((quality, score));
+    }
+
     fuzzy_text_score(&item.search_name, query)
+        .map(|score| (ChannelSwitcherMatchQuality::Context, score))
 }
 
 fn filter_channel_switcher_items(
     items: &[ChannelSwitcherItem],
     query: &str,
 ) -> Vec<ChannelSwitcherItem> {
-    let mut scored: Vec<(FuzzyScore, ChannelSwitcherItem)> = items
+    let mut scored: Vec<(ChannelSwitcherMatchQuality, FuzzyScore, ChannelSwitcherItem)> = items
         .iter()
-        .filter_map(|item| channel_switcher_match_score(item, query).map(|score| (score, item)))
-        .map(|(score, item)| (score, item.clone()))
+        .filter_map(|item| {
+            channel_switcher_match_score(item, query)
+                .map(|(quality, score)| (quality, score, item.clone()))
+        })
         .collect();
-    scored.sort_by_key(|(score, item)| (item.group_order, *score, item.original_index));
-    scored.into_iter().map(|(_, item)| item).collect()
+    scored.sort_by_key(|(quality, score, item)| {
+        (*quality, *score, item.group_order, item.original_index)
+    });
+    scored.into_iter().map(|(_, _, item)| item).collect()
+}
+
+fn channel_switcher_search_channel_name(channel_label: &str) -> &str {
+    channel_label
+        .strip_prefix('#')
+        .or_else(|| channel_label.strip_prefix('@'))
+        .unwrap_or(channel_label)
+}
+
+fn channel_switcher_query_label_prefix(query: &str) -> Option<char> {
+    query
+        .chars()
+        .next()
+        .filter(|prefix| matches!(prefix, '#' | '@'))
 }
 
 fn channel_switcher_channel_label(channel: &ChannelState) -> String {

@@ -23,6 +23,8 @@ use super::{
 };
 use crate::tui::fuzzy::fuzzy_text_score;
 
+const RECENT_CHANNEL_LIMIT: usize = 10;
+
 impl DashboardState {
     pub fn open_selected_channel_actions(&mut self) {
         if self.focus != FocusPane::Channels {
@@ -1213,6 +1215,7 @@ impl DashboardState {
     }
 
     pub(super) fn activate_channel(&mut self, channel_id: Id<ChannelMarker>) {
+        self.record_recent_channel(channel_id);
         let is_forum = self
             .discord
             .channel(channel_id)
@@ -1286,6 +1289,19 @@ impl DashboardState {
         }
 
         self.refresh_composer_emoji_candidates_for_current_query();
+    }
+
+    fn record_recent_channel(&mut self, channel_id: Id<ChannelMarker>) {
+        let Some(channel) = self.discord.channel(channel_id) else {
+            return;
+        };
+        if channel.is_category() || channel.is_thread() {
+            return;
+        }
+
+        self.recent_channel_ids.retain(|id| *id != channel_id);
+        self.recent_channel_ids.push_front(channel_id);
+        self.recent_channel_ids.truncate(RECENT_CHANNEL_LIMIT);
     }
 
     /// Ack the channel up to its latest message and retire the unread

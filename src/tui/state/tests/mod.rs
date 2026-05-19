@@ -5239,7 +5239,7 @@ fn channel_switcher_items_carry_unread_metadata() {
 }
 
 #[test]
-fn channel_switcher_query_matches_guild_name() {
+fn channel_switcher_query_prefers_channel_name_before_context() {
     let mut state = DashboardState::new();
     state.push_event(AppEvent::GuildCreate {
         guild_id: Id::new(1),
@@ -5278,7 +5278,7 @@ fn channel_switcher_query_matches_guild_name() {
             parent_id: None,
             position: Some(0),
             last_message_id: None,
-            name: "lobby".to_owned(),
+            name: "acme-chat".to_owned(),
             kind: "text".to_owned(),
             message_count: None,
             total_message_sent: None,
@@ -5304,12 +5304,11 @@ fn channel_switcher_query_matches_guild_name() {
         .map(|item| item.channel_id)
         .collect();
 
-    assert!(filtered.contains(&Id::new(11)));
-    assert!(!filtered.contains(&Id::new(21)));
+    assert_eq!(filtered, vec![Id::new(21), Id::new(11)]);
 }
 
 #[test]
-fn channel_switcher_lists_unread_channels_in_notifications_section_first() {
+fn channel_switcher_lists_recent_channels_first() {
     let mut state = DashboardState::new();
     state.push_event(AppEvent::GuildCreate {
         guild_id: Id::new(1),
@@ -5356,12 +5355,34 @@ fn channel_switcher_lists_unread_channels_in_notifications_section_first() {
         emojis: Vec::new(),
     });
 
+    state.activate_channel(Id::new(11));
+    state.activate_channel(Id::new(12));
+    state.activate_channel(Id::new(11));
     state.open_channel_switcher();
     let items = state.channel_switcher_items();
 
-    assert_eq!(items[0].group_label, "Notifications");
-    assert_eq!(items[0].channel_id, Id::new(11));
+    assert_eq!(items[0].group_label, "Recent Channels");
+    assert_eq!(items[0].channel_id, Id::new(12));
     assert_eq!(items[0].parent_label.as_deref(), Some("guild"));
+    assert_eq!(
+        items
+            .iter()
+            .filter(|item| {
+                item.group_label == "Recent Channels" && item.channel_id == Id::new(11)
+            })
+            .count(),
+        0
+    );
+    assert_eq!(
+        items
+            .iter()
+            .filter(|item| {
+                item.group_label == "Recent Channels" && item.channel_id == Id::new(12)
+            })
+            .count(),
+        1
+    );
+    assert!(!items.iter().any(|item| item.group_label == "Notifications"));
     assert!(
         items
             .iter()
@@ -5373,6 +5394,76 @@ fn channel_switcher_lists_unread_channels_in_notifications_section_first() {
             .iter()
             .any(|item| { item.group_label == "guild" && item.channel_id == Id::new(12) })
     );
+}
+
+#[test]
+fn channel_switcher_query_matches_display_prefixes() {
+    let mut state = DashboardState::new();
+    state.push_event(AppEvent::ChannelUpsert(ChannelInfo {
+        guild_id: None,
+        channel_id: Id::new(40),
+        parent_id: None,
+        position: None,
+        last_message_id: None,
+        name: "new-dm".to_owned(),
+        kind: "dm".to_owned(),
+        message_count: None,
+        total_message_sent: None,
+        thread_archived: None,
+        thread_locked: None,
+        thread_pinned: None,
+        recipients: None,
+        permission_overwrites: Vec::new(),
+    }));
+    state.push_event(AppEvent::GuildCreate {
+        guild_id: Id::new(1),
+        name: "guild".to_owned(),
+        member_count: None,
+        owner_id: None,
+        channels: vec![ChannelInfo {
+            guild_id: Some(Id::new(1)),
+            channel_id: Id::new(11),
+            parent_id: None,
+            position: Some(0),
+            last_message_id: None,
+            name: "new-text".to_owned(),
+            kind: "text".to_owned(),
+            message_count: None,
+            total_message_sent: None,
+            thread_archived: None,
+            thread_locked: None,
+            thread_pinned: None,
+            recipients: None,
+            permission_overwrites: Vec::new(),
+        }],
+        members: Vec::new(),
+        presences: Vec::new(),
+        roles: Vec::new(),
+        emojis: Vec::new(),
+    });
+
+    state.open_channel_switcher();
+    for ch in "#new".chars() {
+        state.push_channel_switcher_char(ch);
+    }
+    let filtered: Vec<Id<ChannelMarker>> = state
+        .channel_switcher_items()
+        .into_iter()
+        .map(|item| item.channel_id)
+        .collect();
+    assert_eq!(filtered, vec![Id::new(11)]);
+
+    state.close_channel_switcher();
+    state.open_channel_switcher();
+    for ch in "@new".chars() {
+        state.push_channel_switcher_char(ch);
+    }
+    let filtered: Vec<Id<ChannelMarker>> = state
+        .channel_switcher_items()
+        .into_iter()
+        .map(|item| item.channel_id)
+        .collect();
+    assert_eq!(filtered, vec![Id::new(40)]);
 }
 
 #[test]
