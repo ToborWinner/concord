@@ -194,12 +194,12 @@ impl DashboardState {
         self.replace_composer_range(start..end, "");
     }
 
-    pub fn delete_composer_char(&mut self) {
-        let start = self.composer_cursor_byte_index();
-        if start >= self.composer_input.len() {
+    pub fn delete_previous_composer_word(&mut self) {
+        let end = self.composer_cursor_byte_index();
+        if end == 0 {
             return;
         }
-        let end = next_char_boundary(&self.composer_input, start);
+        let start = previous_word_boundary(&self.composer_input, end);
         self.replace_composer_range(start..end, "");
     }
 

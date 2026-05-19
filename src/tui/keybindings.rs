@@ -194,7 +194,7 @@ pub(in crate::tui) enum ComposerAction {
     ClearInput,
     RemoveLastAttachment,
     DeletePreviousChar,
-    DeleteNextChar,
+    DeletePreviousWord,
     MoveCursorUp,
     MoveCursorDown,
     MoveCursorWordLeft,
@@ -627,10 +627,10 @@ impl KeyBindings {
                 ComposerAction::ClearInput
             }
             KeyCode::Backspace if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                ComposerAction::RemoveLastAttachment
+                ComposerAction::DeletePreviousWord
             }
             KeyCode::Backspace => ComposerAction::DeletePreviousChar,
-            KeyCode::Delete => ComposerAction::DeleteNextChar,
+            KeyCode::Delete => ComposerAction::RemoveLastAttachment,
             KeyCode::Up => ComposerAction::MoveCursorUp,
             KeyCode::Down => ComposerAction::MoveCursorDown,
             KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {

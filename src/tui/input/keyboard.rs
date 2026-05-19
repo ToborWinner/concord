@@ -794,8 +794,8 @@ fn handle_composer_key(state: &mut DashboardState, key: KeyEvent) -> Option<AppC
             state.pop_composer_char();
             None
         }
-        ComposerAction::DeleteNextChar => {
-            state.delete_composer_char();
+        ComposerAction::DeletePreviousWord => {
+            state.delete_previous_composer_word();
             None
         }
         ComposerAction::MoveCursorUp => {

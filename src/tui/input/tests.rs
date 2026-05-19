@@ -1465,7 +1465,7 @@ fn composer_cursor_edits_in_middle() {
     assert_eq!(state.composer_cursor_byte_index(), 2);
 
     handle_key(&mut state, key(KeyCode::Delete));
-    assert_eq!(state.composer_input(), "abd");
+    assert_eq!(state.composer_input(), "abcd");
     assert_eq!(state.composer_cursor_byte_index(), 2);
 
     handle_key(&mut state, key(KeyCode::Home));
@@ -1473,11 +1473,37 @@ fn composer_cursor_edits_in_middle() {
     handle_key(&mut state, key(KeyCode::End));
     handle_key(&mut state, char_key('!'));
 
-    assert_eq!(state.composer_input(), ">abd!");
+    assert_eq!(state.composer_input(), ">abcd!");
     assert_eq!(
         state.composer_cursor_byte_index(),
         state.composer_input().len()
     );
+}
+
+#[test]
+fn ctrl_backspace_deletes_previous_composer_word() {
+    let mut state = state_with_channel_tree();
+    state.focus_pane(FocusPane::Channels);
+    handle_key(&mut state, key(KeyCode::Down));
+    handle_key(&mut state, key(KeyCode::Enter));
+    handle_key(&mut state, char_key('i'));
+
+    assert!(handle_paste(&mut state, "hello brave world"));
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL),
+    );
+
+    assert_eq!(state.composer_input(), "hello brave ");
+    assert_eq!(state.composer_cursor_byte_index(), "hello brave ".len());
+
+    handle_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL),
+    );
+
+    assert_eq!(state.composer_input(), "hello ");
+    assert_eq!(state.composer_cursor_byte_index(), "hello ".len());
 }
 
 #[test]
@@ -1670,7 +1696,7 @@ fn paste_file_uri_list_can_submit_attachment_only_message() {
 }
 
 #[test]
-fn ctrl_backspace_removes_last_pending_attachment() {
+fn delete_removes_last_pending_attachment() {
     let first = temp_upload_file("first.txt", b"first");
     let second = temp_upload_file("second.txt", b"second");
     let mut state = state_with_channel_tree();
@@ -1686,10 +1712,7 @@ fn ctrl_backspace_removes_last_pending_attachment() {
     );
 
     assert!(handle_paste(&mut state, &pasted));
-    handle_key(
-        &mut state,
-        KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL),
-    );
+    handle_key(&mut state, key(KeyCode::Delete));
 
     assert_eq!(state.composer_input(), "x");
     assert_eq!(state.pending_composer_attachments().len(), 1);
