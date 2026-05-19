@@ -696,7 +696,8 @@ mod tests {
     use super::{
         ForumPostRequestTarget, ForumPostRequests, HistoryRequests, MemberListSubscriptionRequests,
         MemberListSubscriptionTarget, MemberRequests, MentionMemberSearchRequests,
-        MentionMemberSearchTarget, MessageAuthorMemberRequests, ThreadPreviewRequests,
+        MentionMemberSearchTarget, MessageAuthorMemberRequests, PinnedMessageRequests,
+        ThreadPreviewRequests,
     };
 
     #[test]
@@ -729,6 +730,34 @@ mod tests {
         assert_eq!(requests.next(Some(first), true), None);
         assert_eq!(requests.next(Some(second), false), Some(second));
         assert_eq!(requests.next(Some(first), true), Some(first));
+    }
+
+    #[test]
+    fn pinned_message_request_is_on_demand_and_retries_failed_channel_after_reselect() {
+        let mut requests = PinnedMessageRequests::default();
+        let first = Id::new(1);
+        let second = Id::new(2);
+
+        assert_eq!(requests.next(None), None);
+        assert_eq!(requests.next(Some(first)), Some(first));
+        assert_eq!(requests.next(Some(first)), None);
+        requests.record_event(&AppEvent::PinnedMessagesLoaded {
+            channel_id: first,
+            messages: Vec::new(),
+        });
+        assert_eq!(requests.next(Some(first)), None);
+        assert_eq!(requests.next(Some(second)), Some(second));
+        assert_eq!(requests.next(Some(first)), None);
+
+        let mut requests = PinnedMessageRequests::default();
+        assert_eq!(requests.next(Some(first)), Some(first));
+        requests.record_event(&AppEvent::PinnedMessagesLoadFailed {
+            channel_id: first,
+            message: "temporary failure".to_owned(),
+        });
+        assert_eq!(requests.next(Some(first)), None);
+        assert_eq!(requests.next(Some(second)), Some(second));
+        assert_eq!(requests.next(Some(first)), Some(first));
     }
 
     #[test]

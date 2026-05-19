@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -124,56 +124,55 @@ type WriterHandle = Arc<Mutex<futures::stream::SplitSink<GatewayStream, WsMessag
 
 #[derive(Default)]
 struct SubscriptionDeduper {
-    sent: HashSet<SubscriptionKey>,
+    direct_messages: HashSet<Id<ChannelMarker>>,
+    guild_channels: HashMap<GuildChannelSubscriptionKey, Vec<(u32, u32)>>,
 }
 
 impl SubscriptionDeduper {
     fn should_send(&mut self, command: &GatewayCommand) -> bool {
-        let Some(key) = SubscriptionKey::from_command(command) else {
-            return true;
-        };
-        self.sent.insert(key)
-    }
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-enum SubscriptionKey {
-    DirectMessage {
-        channel_id: Id<ChannelMarker>,
-    },
-    GuildChannel {
-        guild_id: Id<GuildMarker>,
-        channel_id: Id<ChannelMarker>,
-        ranges: Vec<(u32, u32)>,
-    },
-}
-
-impl SubscriptionKey {
-    fn from_command(command: &GatewayCommand) -> Option<Self> {
         match command {
-            GatewayCommand::SubscribeDirectMessage { channel_id } => Some(Self::DirectMessage {
-                channel_id: *channel_id,
-            }),
+            GatewayCommand::SubscribeDirectMessage { channel_id } => {
+                self.direct_messages.insert(*channel_id)
+            }
             GatewayCommand::SubscribeGuildChannel {
                 guild_id,
                 channel_id,
-            } => Some(Self::GuildChannel {
-                guild_id: *guild_id,
-                channel_id: *channel_id,
-                ranges: vec![(0, 99)],
-            }),
+            } => self.should_send_guild_channel(*guild_id, *channel_id, &[(0, 99)]),
             GatewayCommand::UpdateMemberListSubscription {
                 guild_id,
                 channel_id,
                 ranges,
-            } => Some(Self::GuildChannel {
-                guild_id: *guild_id,
-                channel_id: *channel_id,
-                ranges: ranges.clone(),
-            }),
-            _ => None,
+            } => self.should_send_guild_channel(*guild_id, *channel_id, ranges),
+            _ => true,
         }
     }
+
+    fn should_send_guild_channel(
+        &mut self,
+        guild_id: Id<GuildMarker>,
+        channel_id: Id<ChannelMarker>,
+        ranges: &[(u32, u32)],
+    ) -> bool {
+        let key = GuildChannelSubscriptionKey {
+            guild_id,
+            channel_id,
+        };
+        if self
+            .guild_channels
+            .get(&key)
+            .is_some_and(|last_ranges| last_ranges == ranges)
+        {
+            return false;
+        }
+        self.guild_channels.insert(key, ranges.to_vec());
+        true
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct GuildChannelSubscriptionKey {
+    guild_id: Id<GuildMarker>,
+    channel_id: Id<ChannelMarker>,
 }
 
 #[derive(Clone, Copy)]
@@ -1101,6 +1100,16 @@ mod tests {
             guild_id,
             channel_id,
             ranges: vec![(0, 99), (100, 199)],
+        }));
+        assert!(deduper.should_send(&GatewayCommand::UpdateMemberListSubscription {
+            guild_id,
+            channel_id,
+            ranges: vec![(0, 99)],
+        }));
+        assert!(!deduper.should_send(&GatewayCommand::UpdateMemberListSubscription {
+            guild_id,
+            channel_id,
+            ranges: vec![(0, 99)],
         }));
         assert!(deduper.should_send(&GatewayCommand::RequestGuildMembersByIds {
             guild_id,
