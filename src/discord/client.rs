@@ -258,6 +258,15 @@ impl DiscordClient {
         self_mute: bool,
         self_deaf: bool,
     ) -> std::result::Result<(), String> {
+        let mut requested = self
+            .requested_voice
+            .write()
+            .expect("requested voice lock is not poisoned");
+        if voice_state_request_is_duplicate(*requested, guild_id, channel_id, self_mute, self_deaf)
+        {
+            return Ok(());
+        }
+
         let result = self
             .gateway_commands_tx
             .send(GatewayCommand::UpdateVoiceState {
@@ -268,10 +277,6 @@ impl DiscordClient {
             })
             .map_err(|_| "gateway command channel closed".to_owned());
         if result.is_ok() {
-            let mut requested = self
-                .requested_voice
-                .write()
-                .expect("requested voice lock is not poisoned");
             if let Some(channel_id) = channel_id {
                 let allow_microphone_transmit = requested
                     .filter(|voice| voice.guild_id == guild_id && voice.channel_id == channel_id)
@@ -630,6 +635,26 @@ pub(crate) fn validate_token_header(token: &str) -> Result<()> {
     Ok(())
 }
 
+fn voice_state_request_is_duplicate(
+    requested: Option<CurrentVoiceConnectionState>,
+    guild_id: Id<GuildMarker>,
+    channel_id: Option<Id<ChannelMarker>>,
+    self_mute: bool,
+    self_deaf: bool,
+) -> bool {
+    match (requested, channel_id) {
+        (Some(voice), Some(channel_id)) => {
+            voice.guild_id == guild_id
+                && voice.channel_id == channel_id
+                && voice.self_mute == self_mute
+                && voice.self_deaf == self_deaf
+        }
+        (Some(voice), None) => voice.guild_id != guild_id,
+        (None, None) => true,
+        (None, Some(_)) => false,
+    }
+}
+
 fn normalize_member_search_query(query: &str) -> Option<String> {
     let mut normalized = String::new();
     let mut count = 0usize;
@@ -928,6 +953,49 @@ mod tests {
     }
 
     #[test]
+    fn requested_voice_state_skips_duplicate_gateway_updates() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let client = DiscordClient::new("test-token".to_owned()).expect("token is valid header");
+        let mut gateway_commands = client
+            .gateway_commands_rx
+            .lock()
+            .expect("gateway command receiver mutex is not poisoned")
+            .take()
+            .expect("gateway commands can be taken once");
+
+        client
+            .update_voice_state(Id::new(1), Some(Id::new(10)), true, false)
+            .expect("initial join should queue");
+        assert_voice_update(&mut gateway_commands, Id::new(1), Some(Id::new(10)), true, false);
+
+        client
+            .update_voice_state(Id::new(1), Some(Id::new(10)), true, false)
+            .expect("duplicate join is ignored without closing channel");
+        assert!(matches!(
+            gateway_commands.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+
+        client
+            .update_voice_state(Id::new(1), Some(Id::new(10)), false, false)
+            .expect("mute change should queue");
+        assert_voice_update(&mut gateway_commands, Id::new(1), Some(Id::new(10)), false, false);
+
+        client
+            .update_voice_state(Id::new(1), None, false, false)
+            .expect("leave should queue");
+        assert_voice_update(&mut gateway_commands, Id::new(1), None, false, false);
+
+        client
+            .update_voice_state(Id::new(1), None, false, false)
+            .expect("duplicate leave is ignored without closing channel");
+        assert!(matches!(
+            gateway_commands.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[test]
     fn guild_member_search_validates_query_and_caps_limit() {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let client = DiscordClient::new("test-token".to_owned()).expect("token is valid header");
@@ -1157,6 +1225,32 @@ mod tests {
             .await
             .expect("voice sound effect is published");
         assert!(matches!(effect.event, AppEvent::VoiceSound { kind } if kind == expected));
+    }
+
+    fn assert_voice_update(
+        gateway_commands: &mut tokio::sync::mpsc::UnboundedReceiver<GatewayCommand>,
+        expected_guild_id: Id<crate::discord::ids::marker::GuildMarker>,
+        expected_channel_id: Option<Id<crate::discord::ids::marker::ChannelMarker>>,
+        expected_self_mute: bool,
+        expected_self_deaf: bool,
+    ) {
+        let command = gateway_commands
+            .try_recv()
+            .expect("voice command should be queued");
+        let GatewayCommand::UpdateVoiceState {
+            guild_id,
+            channel_id,
+            self_mute,
+            self_deaf,
+        } = command
+        else {
+            panic!("expected voice update command");
+        };
+
+        assert_eq!(guild_id, expected_guild_id);
+        assert_eq!(channel_id, expected_channel_id);
+        assert_eq!(self_mute, expected_self_mute);
+        assert_eq!(self_deaf, expected_self_deaf);
     }
 
     fn thread_channel_upsert_event() -> AppEvent {
