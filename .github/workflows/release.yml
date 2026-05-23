@@ -74,7 +74,7 @@ jobs:
       # limit reuse, so this must never become a release prerequisite.
       - uses: Swatinem/rust-cache@v2
         with:
-          key: release-check
+          shared-key: ci-check
       - name: rustfmt
         run: cargo fmt --all --check
       - name: test
@@ -149,6 +149,9 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_GHA_VERSION: release-${{ join(matrix.targets, '-') }}
     steps:
       - name: enable windows longpaths
         run: |
@@ -167,11 +170,13 @@ jobs:
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
       # Best-effort cache restore for release builds. Target-specific keys avoid
       # mixing artifacts from different cargo-dist matrix cells.
       - uses: Swatinem/rust-cache@v2
         with:
-          key: release-${{ join(matrix.targets, '-') }}
+          shared-key: release-${{ join(matrix.targets, '-') }}
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@v7
