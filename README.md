@@ -327,6 +327,10 @@ Unicode emoji and current-server custom emoji suggestions. Use `Up` / `Down`,
 shortcodes such as `:heart:` are converted to their emoji when the message is
 sent; selected custom emojis are sent using Discord's custom emoji markup.
 
+#### Bot commands
+
+When the composer input starts with a slash `/`, the command suggestion popup
+
 #### Mouse support
 
 Mouse support is also available: click to focus or select rows, double-click to
