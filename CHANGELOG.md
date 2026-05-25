@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.2] - 2026-05-25
+
+### Bug Fixes
+
+- Mark threads created by the current user as joined by @chojs23
+
+### Features
+
+- Support pane resize keybinding by @chojs23
+- Guild role by @chojs23
+- Handle chnnel pins update event by @chojs23
+- Add reaction shortcut for selected messages (#127) in [#127](https://github.com/chojs23/concord/pull/127) by @chojs23
+- Handle discord gateway connection error by @chojs23
+
+### Miscellaneous Tasks
+
+- Add paths-ignore to ci workflow by @chojs23
+
 ## [2.1.1] - 2026-05-25
 
 ### Bug Fixes
