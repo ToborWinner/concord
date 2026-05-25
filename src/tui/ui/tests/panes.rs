@@ -26,6 +26,41 @@ fn header_shows_loading_before_connected_account_is_ready() {
 }
 
 #[test]
+fn header_shows_gateway_error_before_connected_account_is_ready() {
+    let mut state = DashboardState::new();
+    state.push_effect(AppEvent::GatewayError {
+        message: "websocket closed: code=4004 reason=authentication failed".to_owned(),
+    });
+
+    let dump = render_dashboard_dump(120, 10, &mut state);
+    let header = dump.first().expect("dashboard render includes header");
+
+    assert!(header.contains("Concord - v"), "{header}");
+    assert!(header.contains("Connection issue:"), "{header}");
+    assert!(header.contains("websocket closed"), "{header}");
+    assert!(!header.contains("Loading..."), "{header}");
+}
+
+#[test]
+fn header_clears_gateway_error_after_connected_account_is_ready() {
+    let mut state = DashboardState::new();
+    state.push_effect(AppEvent::GatewayError {
+        message: "websocket closed before READY".to_owned(),
+    });
+    state.push_event(AppEvent::Ready {
+        user: "muri".to_owned(),
+        user_id: Some(Id::new(10)),
+    });
+
+    let dump = render_dashboard_dump(100, 10, &mut state);
+    let header = dump.first().expect("dashboard render includes header");
+
+    assert!(header.contains("Connected as muri"), "{header}");
+    assert!(!header.contains("Connection issue:"), "{header}");
+    assert!(!header.contains("Loading..."), "{header}");
+}
+
+#[test]
 fn header_shows_connected_account() {
     let mut state = DashboardState::new();
     state.push_event(AppEvent::Ready {

@@ -8,6 +8,10 @@ impl DashboardState {
         self.discord.update_available_version.as_deref()
     }
 
+    pub fn gateway_error(&self) -> Option<&str> {
+        self.runtime.gateway_error.as_deref()
+    }
+
     pub fn is_debug_log_popup_open(&self) -> bool {
         self.popups.debug_log_popup_open
     }

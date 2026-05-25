@@ -6,6 +6,7 @@ use crate::discord::{
     AppCommand, AppEvent, DownloadAttachmentSource, ForumPostArchiveState, MentionInfo,
     MessageSnapshotInfo, VoiceConnectionStatus,
 };
+use crate::logging;
 
 mod attachment_viewer;
 mod channel_switcher;
@@ -181,6 +182,12 @@ impl DashboardState {
             AppEvent::Ready { user, user_id } => {
                 self.discord.current_user = Some(user.clone());
                 self.discord.current_user_id = *user_id;
+                self.runtime.gateway_error = None;
+            }
+            AppEvent::GatewayError { message } => {
+                logging::error("tui", message);
+                self.runtime.gateway_error = Some(message.clone());
+                self.show_error_toast(message, Instant::now());
             }
             AppEvent::CurrentUserCapabilities {
                 can_use_animated_custom_emojis,

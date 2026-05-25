@@ -1655,6 +1655,11 @@ pub(super) fn render_header(frame: &mut Frame, area: Rect, state: &DashboardStat
         if self_deaf {
             spans.push(Span::styled("🎧 ", Style::default().fg(Color::Yellow)));
         }
+    } else if let Some(error) = state.gateway_error() {
+        spans.push(Span::styled(
+            format!(" Connection issue: {} ", truncate_header_error(error)),
+            Style::default().fg(Color::Red).bold(),
+        ));
     } else {
         spans.push(Span::styled(
             " Loading... ",
@@ -1678,4 +1683,15 @@ pub(super) fn render_header(frame: &mut Frame, area: Rect, state: &DashboardStat
         Paragraph::new(Line::from(spans)).alignment(Alignment::Left),
         area,
     );
+}
+
+fn truncate_header_error(error: &str) -> String {
+    const MAX_CHARS: usize = 96;
+    let mut chars = error.chars();
+    let truncated: String = chars.by_ref().take(MAX_CHARS).collect();
+    if chars.next().is_some() {
+        format!("{truncated}...")
+    } else {
+        truncated
+    }
 }

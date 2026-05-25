@@ -24,6 +24,10 @@ use tokio_tungstenite::{
 use super::{
     client::publish_app_event,
     events::{AppEvent, SequencedAppEvent},
+    fingerprint::{
+        CLIENT_BROWSER, CLIENT_BROWSER_VERSION, CLIENT_BUILD_NUMBER, discord_web_os,
+        discord_web_os_version, discord_web_user_agent,
+    },
     state::{DiscordState, SnapshotRevision},
     voice::{self, VoiceRuntimeEvent},
 };
@@ -100,11 +104,6 @@ const GATEWAY_URL: &str = "wss://gateway.discord.gg/?v=9&encoding=json";
 ///   6  MULTIPLE_GUILD_EXPERIMENT_POPULATIONS
 ///   7  NON_CHANNEL_READ_STATES
 const USER_ACCOUNT_CAPABILITIES: u64 = 253;
-
-const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
-    (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-const BROWSER_VERSION: &str = "120.0.0.0";
-const CLIENT_BUILD_NUMBER: u64 = 250000;
 
 // Some user-account READY payloads exceed tungstenite's default 16 MiB frame
 // cap before Discord has a chance to split the initial state across follow-up
@@ -195,6 +194,7 @@ struct FrameContext<'a> {
 }
 
 /// What to do after one connection lifecycle ends.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ConnectionOutcome {
     /// The websocket dropped or Discord asked us to reconnect. Try to RESUME
     /// using the saved session_id + sequence number.
@@ -204,6 +204,10 @@ enum ConnectionOutcome {
     Reidentify,
     /// The downstream consumers went away, so stop the loop entirely.
     Stop,
+    /// Discord rejected this gateway session in a way that retrying the same
+    /// token or shard configuration cannot fix. Keep the UI alive so it can
+    /// show the published gateway error.
+    Fatal,
 }
 
 /// Mutable session bookkeeping that survives reconnects. We only persist what
@@ -244,6 +248,7 @@ pub async fn run_gateway(
 ) {
     let mut session = SessionState::default();
     let mut backoff = RECONNECT_BASE_DELAY;
+    let mut publish_gateway_closed = true;
 
     loop {
         let publish = GatewayPublishContext {
@@ -284,6 +289,10 @@ pub async fn run_gateway(
                     .write()
                     .expect("gateway session id lock is not poisoned") = None;
             }
+            ConnectionOutcome::Fatal => {
+                publish_gateway_closed = false;
+                break;
+            }
         }
 
         // Exponential backoff with full jitter so a flapping network doesn't
@@ -298,16 +307,18 @@ pub async fn run_gateway(
         backoff = (backoff * 2).min(RECONNECT_MAX_DELAY);
     }
 
-    let publish = GatewayPublishContext {
-        effects_tx: &runtime.effects_tx,
-        snapshots_tx: &runtime.snapshots_tx,
-        state: &runtime.state,
-        revision: &runtime.revision,
-        gateway_session_id: &runtime.gateway_session_id,
-        publish_lock: &runtime.publish_lock,
-        voice_events_tx: &runtime.voice_events_tx,
-    };
-    publish_gateway_event(publish, AppEvent::GatewayClosed).await;
+    if publish_gateway_closed {
+        let publish = GatewayPublishContext {
+            effects_tx: &runtime.effects_tx,
+            snapshots_tx: &runtime.snapshots_tx,
+            state: &runtime.state,
+            revision: &runtime.revision,
+            gateway_session_id: &runtime.gateway_session_id,
+            publish_lock: &runtime.publish_lock,
+            voice_events_tx: &runtime.voice_events_tx,
+        };
+        publish_gateway_event(publish, AppEvent::GatewayClosed).await;
+    }
 }
 
 async fn connect_and_run(
@@ -598,12 +609,17 @@ fn close_outcome(frame: Option<&CloseFrame>) -> ConnectionOutcome {
     let Some(frame) = frame else {
         return ConnectionOutcome::Resume;
     };
-    // Per Discord's documented close codes: anything outside 4000-4009 is a
-    // hard fail (auth, intent mismatch, sharding) where RESUME would just be
-    // rejected, so we re-IDENTIFY from scratch.
-    let code = u16::from(frame.code);
+    close_code_outcome(u16::from(frame.code))
+}
+
+fn close_code_outcome(code: u16) -> ConnectionOutcome {
+    // Authentication and gateway configuration failures are not transient.
+    // Retrying the same IDENTIFY would hide the real problem behind Loading...
+    // and can loop forever for codes such as 4004.
     match code {
-        4000..=4009 => ConnectionOutcome::Resume,
+        4004 | 4010..=4014 => ConnectionOutcome::Fatal,
+        4007 | 4009 => ConnectionOutcome::Reidentify,
+        4000..=4003 | 4005 | 4008 => ConnectionOutcome::Resume,
         _ => ConnectionOutcome::Reidentify,
     }
 }
@@ -743,19 +759,22 @@ async fn send_text(writer: &WriterHandle, payload: String) -> Result<(), String>
 }
 
 fn build_identify_payload(token: &str) -> String {
+    let os = discord_web_os();
+    let os_version = discord_web_os_version();
+    let user_agent = discord_web_user_agent();
     json!({
         "op": 2,
         "d": {
             "token": token,
             "capabilities": USER_ACCOUNT_CAPABILITIES,
             "properties": {
-                "os": "Linux",
-                "browser": "Chrome",
+                "os": os,
+                "browser": CLIENT_BROWSER,
                 "device": "",
                 "system_locale": "en-US",
-                "browser_user_agent": BROWSER_USER_AGENT,
-                "browser_version": BROWSER_VERSION,
-                "os_version": "",
+                "browser_user_agent": user_agent,
+                "browser_version": CLIENT_BROWSER_VERSION,
+                "os_version": os_version,
                 "referrer": "",
                 "referring_domain": "",
                 "referrer_current": "",
@@ -895,6 +914,10 @@ fn voice_state_update_payload(
 
 #[cfg(test)]
 mod tests {
+    use crate::discord::fingerprint::{
+        CLIENT_BROWSER, CLIENT_BROWSER_VERSION, CLIENT_BUILD_NUMBER, discord_web_os,
+        discord_web_os_version, discord_web_user_agent,
+    };
     use crate::discord::ids::{
         Id,
         marker::{ChannelMarker, GuildMarker, UserMarker},
@@ -902,11 +925,12 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        GATEWAY_WEBSOCKET_LIMIT, GatewayCommand, SessionState, SubscriptionDeduper,
-        USER_ACCOUNT_CAPABILITIES, build_identify_payload, build_resume_payload,
-        direct_message_subscribe_payload, gateway_websocket_config,
-        guild_channel_subscribe_payload, request_guild_members_by_ids_payload,
-        request_guild_members_payload, voice_state_update_payload,
+        ConnectionOutcome, GATEWAY_WEBSOCKET_LIMIT, GatewayCommand, SessionState,
+        SubscriptionDeduper, USER_ACCOUNT_CAPABILITIES, build_identify_payload,
+        build_resume_payload, close_code_outcome, direct_message_subscribe_payload,
+        gateway_websocket_config, guild_channel_subscribe_payload,
+        request_guild_members_by_ids_payload, request_guild_members_payload,
+        voice_state_update_payload,
     };
 
     #[test]
@@ -927,15 +951,41 @@ mod tests {
             payload["d"]["capabilities"].as_u64(),
             Some(USER_ACCOUNT_CAPABILITIES)
         );
-        // Browser-style fingerprint is what unlocks friend presence streaming
-        // for user accounts.
-        assert!(
-            payload["d"]["properties"]["browser_user_agent"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("Chrome")
+        assert_eq!(
+            payload["d"]["properties"]["os"].as_str(),
+            Some(discord_web_os())
+        );
+        assert_eq!(
+            payload["d"]["properties"]["browser"].as_str(),
+            Some(CLIENT_BROWSER)
+        );
+        assert_eq!(
+            payload["d"]["properties"]["browser_user_agent"].as_str(),
+            Some(discord_web_user_agent().as_str())
+        );
+        assert_eq!(
+            payload["d"]["properties"]["browser_version"].as_str(),
+            Some(CLIENT_BROWSER_VERSION)
+        );
+        assert_eq!(
+            payload["d"]["properties"]["os_version"].as_str(),
+            Some(discord_web_os_version().as_str())
+        );
+        assert_eq!(
+            payload["d"]["properties"]["client_build_number"].as_u64(),
+            Some(CLIENT_BUILD_NUMBER)
         );
         assert_eq!(payload["d"]["compress"].as_bool(), Some(false));
+    }
+
+    #[test]
+    fn fatal_gateway_close_codes_do_not_retry_identify() {
+        for code in [4004, 4010, 4011, 4012, 4013, 4014] {
+            assert_eq!(close_code_outcome(code), ConnectionOutcome::Fatal, "{code}");
+        }
+        assert_eq!(close_code_outcome(4007), ConnectionOutcome::Reidentify);
+        assert_eq!(close_code_outcome(4009), ConnectionOutcome::Reidentify);
+        assert_eq!(close_code_outcome(4000), ConnectionOutcome::Resume);
     }
 
     #[test]

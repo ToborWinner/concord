@@ -16,8 +16,9 @@ use tokio_tungstenite::{
     tungstenite::{Message, client::IntoClientRequest, http::HeaderValue},
 };
 
-use super::auth_http::{
-    DISCORD_LOGIN_REFERER, DISCORD_ORIGIN, DISCORD_WEB_USER_AGENT, discord_web_client,
+use super::{
+    auth_http::{DISCORD_LOGIN_REFERER, DISCORD_ORIGIN, discord_web_client},
+    fingerprint::discord_web_user_agent,
 };
 
 const REMOTE_AUTH_URL: &str = "wss://remote-auth-gateway.discord.gg/?v=2";
@@ -70,7 +71,7 @@ async fn run(tx: &mpsc::Sender<QrEvent>) -> Result<Option<String>, String> {
         headers.insert("Origin", HeaderValue::from_static(DISCORD_ORIGIN));
         headers.insert(
             "User-Agent",
-            HeaderValue::from_static(DISCORD_WEB_USER_AGENT),
+            HeaderValue::from_str(&discord_web_user_agent()).expect("web user agent is valid"),
         );
     }
 

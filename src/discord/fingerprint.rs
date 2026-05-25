@@ -10,10 +10,9 @@ use uuid::Uuid;
 use super::auth_http::DISCORD_ORIGIN;
 
 pub(super) const CLIENT_BUILD_NUMBER: u64 = 536_121;
-pub(super) const CLIENT_VERSION: &str = "0.0.397";
+pub(super) const CLIENT_BROWSER: &str = "Chrome";
+pub(super) const CLIENT_BROWSER_VERSION: &str = "143.0.0.0";
 
-const CHROME_VERSION: &str = "142.0.7444.175";
-const ELECTRON_VERSION: &str = "38.2.0";
 const DISCORD_CHANNELS_REFERER: &str = "https://discord.com/channels/@me";
 const ACCEPT_LANGUAGE_VALUE: &str = "en-US,en;q=0.9";
 const DISCORD_LOCALE: &str = "en-US";
@@ -26,7 +25,6 @@ struct SuperProperties {
     device: &'static str,
     browser: &'static str,
     release_channel: &'static str,
-    client_version: &'static str,
     os_version: String,
     os_arch: &'static str,
     system_locale: &'static str,
@@ -34,12 +32,11 @@ struct SuperProperties {
     browser_user_agent: String,
     browser_version: &'static str,
     client_build_number: u64,
-    native_build_number: Option<u64>,
     client_event_source: Option<String>,
-    client_app_state: &'static str,
     launch_signature: String,
     client_launch_id: String,
     client_heartbeat_session_id: String,
+    client_app_state: &'static str,
     referrer: &'static str,
     referrer_current: &'static str,
     referring_domain: &'static str,
@@ -66,7 +63,7 @@ pub(super) fn discord_rest_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(
         USER_AGENT,
-        HeaderValue::from_str(&identity.user_agent).expect("desktop user agent is valid"),
+        HeaderValue::from_str(&identity.user_agent).expect("web user agent is valid"),
     );
     headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
     headers.insert(
@@ -104,22 +101,20 @@ fn build_super_properties(identity: &ClientIdentity) -> String {
     let properties = SuperProperties {
         os: identity.os,
         device: "",
-        browser: "Discord Client",
+        browser: CLIENT_BROWSER,
         release_channel: "stable",
-        client_version: CLIENT_VERSION,
         os_version: identity.os_version.clone(),
         os_arch: identity.os_arch,
         system_locale: SYSTEM_LOCALE,
         has_client_mods: false,
         browser_user_agent: identity.user_agent.clone(),
-        browser_version: "",
+        browser_version: CLIENT_BROWSER_VERSION,
         client_build_number: CLIENT_BUILD_NUMBER,
-        native_build_number: None,
         client_event_source: None,
-        client_app_state: "focused",
         launch_signature: generate_launch_signature(),
         client_launch_id: Uuid::new_v4().to_string(),
         client_heartbeat_session_id: Uuid::new_v4().to_string(),
+        client_app_state: "unfocused",
         referrer: "",
         referrer_current: "",
         referring_domain: "",
@@ -133,7 +128,7 @@ fn client_identity() -> ClientIdentity {
     let os = operating_system();
     let os_version = operating_system_version();
     let os_arch = operating_system_arch();
-    let user_agent = desktop_user_agent(os, &os_version, os_arch);
+    let user_agent = web_user_agent(os, &os_version, os_arch);
     ClientIdentity {
         os,
         os_version,
@@ -142,7 +137,19 @@ fn client_identity() -> ClientIdentity {
     }
 }
 
-fn desktop_user_agent(os: &str, os_version: &str, os_arch: &str) -> String {
+pub(super) fn discord_web_os() -> &'static str {
+    operating_system()
+}
+
+pub(super) fn discord_web_os_version() -> String {
+    operating_system_version()
+}
+
+pub(super) fn discord_web_user_agent() -> String {
+    client_identity().user_agent
+}
+
+fn web_user_agent(os: &str, os_version: &str, os_arch: &str) -> String {
     let platform = match os {
         "Windows" => "Windows NT 10.0; Win64; x64".to_owned(),
         "Mac OS X" => format!("Macintosh; Intel Mac OS X {}", os_version.replace('.', "_")),
@@ -151,8 +158,7 @@ fn desktop_user_agent(os: &str, os_version: &str, os_arch: &str) -> String {
     };
     format!(
         "Mozilla/5.0 ({platform}) AppleWebKit/537.36 (KHTML, like Gecko) \
-         discord/{CLIENT_VERSION} Chrome/{CHROME_VERSION} Electron/{ELECTRON_VERSION} \
-         Safari/537.36"
+         Chrome/{CLIENT_BROWSER_VERSION} Safari/537.36"
     )
 }
 
@@ -228,7 +234,7 @@ mod tests {
     };
 
     #[test]
-    fn rest_headers_match_desktop_fingerprint_plan() {
+    fn rest_headers_match_web_fingerprint_plan() {
         let headers = discord_rest_headers();
         let identity = client_identity();
 
@@ -308,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn super_properties_are_base64_encoded_desktop_fields() {
+    fn super_properties_are_base64_encoded_web_fields() {
         let identity = client_identity();
         let encoded = build_super_properties(&identity);
         let decoded = STANDARD
@@ -319,25 +325,55 @@ mod tests {
 
         assert_eq!(value["os"], identity.os);
         assert_eq!(value["device"], "");
-        assert_eq!(value["browser"], "Discord Client");
+        assert_eq!(value["browser"], CLIENT_BROWSER);
         assert_eq!(value["release_channel"], "stable");
-        assert_eq!(value["client_version"], CLIENT_VERSION);
         assert_eq!(value["os_arch"], identity.os_arch);
         assert_eq!(value["system_locale"], SYSTEM_LOCALE);
         assert_eq!(value["has_client_mods"], false);
         assert_eq!(value["browser_user_agent"], identity.user_agent);
-        assert_eq!(value["browser_version"], "");
+        assert_eq!(value["browser_version"], CLIENT_BROWSER_VERSION);
         assert_eq!(value["client_build_number"], CLIENT_BUILD_NUMBER);
-        assert!(value["native_build_number"].is_null());
         assert!(value["client_event_source"].is_null());
-        assert_eq!(value["client_app_state"], "focused");
         assert_uuid_field(&value, "launch_signature");
         assert_uuid_field(&value, "client_launch_id");
         assert_uuid_field(&value, "client_heartbeat_session_id");
+        assert_eq!(value["client_app_state"], "unfocused");
         assert_eq!(value["referrer"], "");
         assert_eq!(value["referrer_current"], "");
         assert_eq!(value["referring_domain"], "");
         assert_eq!(value["referring_domain_current"], "");
+        assert!(value.get("client_version").is_none());
+        assert!(value.get("native_build_number").is_none());
+    }
+
+    #[test]
+    fn launch_signature_applies_discord_mask() {
+        let signature = generate_launch_signature();
+        let uuid = Uuid::parse_str(&signature).expect("launch signature should be a UUID");
+        let bytes = uuid.as_bytes();
+
+        for (index, mask) in [
+            (1, 0b1000_0000),
+            (2, 0b0001_0000),
+            (3, 0b0001_0000),
+            (4, 0b0000_1000),
+            (5, 0b0001_0000),
+            (6, 0b0000_1000),
+            (8, 0b0010_0000),
+            (9, 0b1000_0001),
+            (11, 0b0100_0000),
+            (12, 0b0000_0001),
+            (14, 0b0000_1000),
+        ] {
+            assert_eq!(bytes[index] & mask, 0);
+        }
+    }
+
+    fn assert_uuid_field(value: &Value, field: &str) {
+        let raw = value[field]
+            .as_str()
+            .unwrap_or_else(|| panic!("{field} should be a string"));
+        Uuid::parse_str(raw).unwrap_or_else(|_| panic!("{field} should be a UUID"));
     }
 
     #[test]
@@ -368,7 +404,7 @@ mod tests {
                 headers.iter().any(|line| line
                     .to_ascii_lowercase()
                     .starts_with("user-agent: mozilla/5.0")),
-                "desktop user agent should be sent"
+                "web user agent should be sent"
             );
             assert!(
                 headers.iter().any(|line| {
@@ -402,36 +438,6 @@ mod tests {
                 .expect("second local response should be successful");
         });
         server.join().expect("test server should finish");
-    }
-
-    #[test]
-    fn launch_signature_applies_discord_mask() {
-        let signature = generate_launch_signature();
-        let uuid = Uuid::parse_str(&signature).expect("launch signature should be a UUID");
-        let bytes = uuid.as_bytes();
-
-        for (index, mask) in [
-            (1, 0b1000_0000),
-            (2, 0b0001_0000),
-            (3, 0b0001_0000),
-            (4, 0b0000_1000),
-            (5, 0b0001_0000),
-            (6, 0b0000_1000),
-            (8, 0b0010_0000),
-            (9, 0b1000_0001),
-            (11, 0b0100_0000),
-            (12, 0b0000_0001),
-            (14, 0b0000_1000),
-        ] {
-            assert_eq!(bytes[index] & mask, 0);
-        }
-    }
-
-    fn assert_uuid_field(value: &Value, field: &str) {
-        let raw = value[field]
-            .as_str()
-            .unwrap_or_else(|| panic!("{field} should be a string"));
-        Uuid::parse_str(raw).unwrap_or_else(|_| panic!("{field} should be a UUID"));
     }
 
     fn accept_request(listener: &TcpListener) -> TcpStream {

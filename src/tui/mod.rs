@@ -451,6 +451,20 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn gateway_error_forces_redraw_without_signature_change() {
+        let state = state_with_messages(1);
+        let signature = visible_dashboard_signature(&state);
+        let error = AppEvent::GatewayError {
+            message: "websocket closed before READY".to_owned(),
+        };
+
+        assert!(effect_forces_redraw(&error));
+        assert!(should_redraw_after_visible_signature_change(
+            &signature, &signature, false, true,
+        ));
+    }
+
     fn state_with_messages(count: u64) -> DashboardState {
         let guild_id: Id<GuildMarker> = Id::new(1);
         let channel_id: Id<ChannelMarker> = Id::new(2);

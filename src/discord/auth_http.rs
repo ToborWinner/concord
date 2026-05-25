@@ -1,11 +1,11 @@
+use super::fingerprint::discord_web_user_agent;
+
 pub(super) const DISCORD_ORIGIN: &str = "https://discord.com";
 pub(super) const DISCORD_LOGIN_REFERER: &str = "https://discord.com/login";
-pub(super) const DISCORD_WEB_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                          (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
 
 pub(super) fn discord_web_client() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
-        .user_agent(DISCORD_WEB_USER_AGENT)
+        .user_agent(discord_web_user_agent())
         .build()
 }
 

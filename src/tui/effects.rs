@@ -64,6 +64,7 @@ pub(super) fn effect_forces_redraw(event: &AppEvent) -> bool {
         event,
         AppEvent::AttachmentPreviewLoaded { .. }
             | AppEvent::AttachmentPreviewLoadFailed { .. }
+            | AppEvent::GatewayError { .. }
             | AppEvent::GatewayClosed
     )
 }
