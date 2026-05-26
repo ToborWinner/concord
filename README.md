@@ -15,6 +15,28 @@ brew install chojs23/tap/concord
 
 ### Cargo
 
+`cargo install` builds Concord from source, so it requires pkg-config and the
+Opus development library. Concord links against Opus in the default build so it
+can decode received Discord voice audio.
+
+On Fedora:
+
+```sh
+sudo dnf install opus-devel pkgconf-pkg-config
+```
+
+On Debian or Ubuntu:
+
+```sh
+sudo apt install libopus-dev pkg-config
+```
+
+On macOS with Homebrew:
+
+```sh
+brew install opus pkg-config
+```
+
 ```sh
 cargo install concord
 ```
@@ -75,7 +97,8 @@ The installer places `concord` under `$CARGO_HOME/bin`, which is usually
 
 ### Build from source
 
-You need the Rust stable toolchain and Cargo.
+You need the Rust stable toolchain, Cargo, and the native dependencies listed in
+the Cargo install section.
 
 ```sh
 git clone https://github.com/chojs23/concord.git
@@ -98,8 +121,8 @@ voice playback and gated microphone transmit, enable the optional
 cargo build --release --features voice-playback
 ```
 
-Linux playback uses the system audio stack through `cpal`. You may need ALSA
-development files when building from source:
+Linux playback uses the system audio stack through `cpal`. If you build with
+`voice-playback`, you may also need ALSA development files:
 
 ```sh
 sudo apt install libasound2-dev
