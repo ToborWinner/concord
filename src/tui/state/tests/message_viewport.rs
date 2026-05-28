@@ -261,6 +261,7 @@ fn new_messages_marker_clears_when_user_reaches_latest() {
         LatestAction::ScrollViewportDown,
     ] {
         let mut state = state_with_messages(5);
+        clear_scheduled_read_ack(&mut state);
         state.focus_pane(FocusPane::Messages);
         state.set_message_view_height(3);
         state.clamp_message_viewport_for_image_previews(80, 16, 3);
@@ -281,6 +282,13 @@ fn new_messages_marker_clears_when_user_reaches_latest() {
         }
 
         assert_eq!(state.new_messages_marker_message_id(), None);
+        assert_eq!(
+            state.drain_pending_commands(),
+            vec![AppCommand::ScheduleAckChannel {
+                channel_id: Id::new(2),
+                message_id: Id::new(6),
+            }]
+        );
     }
 }
 

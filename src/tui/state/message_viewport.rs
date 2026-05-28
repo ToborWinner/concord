@@ -404,6 +404,7 @@ impl DashboardState {
             self.messages.message_max_preview_height,
         );
         if self.is_viewport_at_latest_message() {
+            self.ack_new_messages_marker_if_present();
             self.clear_new_messages_marker();
             self.normalize_message_line_scroll(
                 self.messages.message_content_width,
@@ -454,6 +455,7 @@ impl DashboardState {
         }
         self.messages.message_auto_follow = false;
         self.messages.message_keep_selection_visible = false;
+        self.ack_new_messages_marker_if_present();
         self.clear_new_messages_marker();
         self.align_message_viewport_to_bottom(
             self.messages.message_content_width,
@@ -553,6 +555,7 @@ impl DashboardState {
         self.messages.message_auto_follow =
             self.cursor_on_last_message() && self.is_viewport_at_latest_message();
         if self.messages.message_auto_follow {
+            self.ack_new_messages_marker_if_present();
             self.clear_new_messages_marker();
             // Once the user has caught up (cursor + viewport on the
             // latest), retire the unread divider/banner so the indicator
@@ -564,6 +567,14 @@ impl DashboardState {
 
     pub(super) fn clear_new_messages_marker(&mut self) {
         self.messages.new_messages_marker_message_id = None;
+    }
+
+    fn ack_new_messages_marker_if_present(&mut self) {
+        if self.messages.new_messages_marker_message_id.is_some()
+            && let Some(channel_id) = self.selected_message_history_channel_id()
+        {
+            self.schedule_channel_ack(channel_id);
+        }
     }
 
     pub(super) fn clear_missing_new_messages_marker(&mut self) {
