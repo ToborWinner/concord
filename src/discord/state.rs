@@ -543,6 +543,7 @@ impl DiscordState {
             AppEvent::MessageCreate { .. } => SnapshotAreas::navigation_and_message(),
 
             AppEvent::MessageHistoryLoaded { .. }
+            | AppEvent::MessageHistoryAroundLoaded { .. }
             | AppEvent::ThreadPreviewLoaded { .. }
             | AppEvent::MessageUpdate { .. }
             | AppEvent::CurrentUserReactionAdd { .. }
@@ -931,6 +932,13 @@ impl DiscordState {
                 if before.is_none() {
                     self.touch_warm_message_channel(*channel_id);
                 }
+            }
+            AppEvent::MessageHistoryAroundLoaded {
+                channel_id,
+                message_id,
+                messages,
+            } => {
+                self.merge_message_history(*channel_id, Some(*message_id), messages);
             }
             AppEvent::ThreadPreviewLoaded {
                 channel_id,

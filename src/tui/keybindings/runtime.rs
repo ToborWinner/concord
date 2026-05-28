@@ -161,6 +161,9 @@ impl KeyBindings {
             UiAction::OpenPollVotePicker if focus == FocusPane::Messages => Some(
                 DashboardAction::MessageShortcut(MessageActionKind::OpenPollVotePicker),
             ),
+            UiAction::GoToReferencedMessage if focus == FocusPane::Messages => Some(
+                DashboardAction::MessageShortcut(MessageActionKind::GoToReferencedMessage),
+            ),
             _ => None,
         }
     }
@@ -980,10 +983,7 @@ where
     K: Copy,
 {
     let shortcut_sets = kinds.into_iter().map(shortcuts).collect::<Vec<_>>();
-    let Some(preferred) = shortcut_sets.get(index) else {
-        return Vec::new();
-    };
-    if preferred.is_empty() {
+    if shortcut_sets.get(index).is_none() {
         return Vec::new();
     }
     action_shortcuts(index, shortcut_sets)

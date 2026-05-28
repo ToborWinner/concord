@@ -156,6 +156,54 @@ fn start_command_loop(
                             }
                         }
                     }
+                    AppCommand::LoadMessageHistoryAround {
+                        channel_id,
+                        message_id,
+                    } => {
+                        let endpoint = format_message_history_anchor_endpoint(
+                            channel_id,
+                            "around",
+                            message_id,
+                            MESSAGE_HISTORY_LIMIT,
+                        );
+                        match client
+                            .load_message_history_around(
+                                channel_id,
+                                message_id,
+                                MESSAGE_HISTORY_LIMIT,
+                            )
+                            .await
+                        {
+                            Ok(messages) => {
+                                client
+                                    .publish_event(AppEvent::MessageHistoryAroundLoaded {
+                                        channel_id,
+                                        message_id,
+                                        messages,
+                                    })
+                                    .await;
+                            }
+                            Err(error) => {
+                                let message = format!("load message history failed: {error}");
+                                let detail = error.log_detail();
+                                logging::error(
+                                    "history",
+                                    format!(
+                                        "op=load_message_history_around channel_id={} message_id={} limit={} endpoint=\"{endpoint}\" {message}; detail={detail}",
+                                        channel_id.get(),
+                                        message_id.get(),
+                                        MESSAGE_HISTORY_LIMIT,
+                                    ),
+                                );
+                                client
+                                    .publish_event(AppEvent::MessageHistoryLoadFailed {
+                                        channel_id,
+                                        message,
+                                    })
+                                    .await;
+                            }
+                        }
+                    }
                     AppCommand::LoadThreadPreview {
                         channel_id,
                         message_id,
@@ -1045,6 +1093,19 @@ fn format_message_history_endpoint(
         ),
         None => format!("GET /channels/{}/messages?limit={limit}", channel_id.get(),),
     }
+}
+
+fn format_message_history_anchor_endpoint(
+    channel_id: Id<ChannelMarker>,
+    anchor_name: &str,
+    message_id: Id<MessageMarker>,
+    limit: u16,
+) -> String {
+    format!(
+        "GET /channels/{}/messages?limit={limit}&{anchor_name}={}",
+        channel_id.get(),
+        message_id.get(),
+    )
 }
 
 fn message_create_event(message: MessageInfo) -> AppEvent {

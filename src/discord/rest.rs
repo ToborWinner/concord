@@ -419,6 +419,57 @@ impl DiscordRest {
             .collect()
     }
 
+    pub async fn load_message_history_around(
+        &self,
+        channel_id: Id<ChannelMarker>,
+        message_id: Id<MessageMarker>,
+        limit: u16,
+    ) -> Result<Vec<MessageInfo>> {
+        self.load_message_history_with_anchor(channel_id, "around", message_id, limit)
+            .await
+    }
+
+    async fn load_message_history_with_anchor(
+        &self,
+        channel_id: Id<ChannelMarker>,
+        anchor_name: &str,
+        message_id: Id<MessageMarker>,
+        limit: u16,
+    ) -> Result<Vec<MessageInfo>> {
+        let raw_messages: Vec<Value> = self
+            .raw_http
+            .get(format!(
+                "https://discord.com/api/v9/channels/{}/messages",
+                channel_id.get()
+            ))
+            .header(AUTHORIZATION, &self.token)
+            .query(&[("limit", limit.to_string())])
+            .query(&[(anchor_name, message_id.to_string())])
+            .send()
+            .await
+            .map_err(|error| {
+                AppError::DiscordRequest(format!("message history request failed: {error}"))
+            })?
+            .error_for_status()
+            .map_err(|error| AppError::DiscordRequest(format!("message history failed: {error}")))?
+            .json()
+            .await
+            .map_err(|error| {
+                AppError::DiscordRequest(format!("message history decode failed: {error}"))
+            })?;
+
+        raw_messages
+            .iter()
+            .map(|raw| {
+                parse_message_info(raw).ok_or_else(|| {
+                    AppError::DiscordRequest(
+                        "history message response was missing required fields".to_owned(),
+                    )
+                })
+            })
+            .collect()
+    }
+
     pub async fn load_forum_posts(
         &self,
         guild_id: Id<GuildMarker>,

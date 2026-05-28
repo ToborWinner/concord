@@ -22,8 +22,9 @@ use crate::{
         AppEvent, ApplicationCommandInfo, ApplicationCommandOptionInfo, ChannelInfo,
         ChannelNotificationOverrideInfo, ChannelRecipientInfo, CustomEmojiInfo,
         DownloadAttachmentSource, GuildFolder, GuildNotificationSettingsInfo, MemberInfo,
-        MessageReferenceInfo, NotificationLevel, PollAnswerInfo, PollInfo, PresenceStatus,
-        ReactionEmoji, ReactionUserInfo, ReactionUsersInfo, VoiceConnectionStatus,
+        MessageInfo, MessageReferenceInfo, MessageSnapshotInfo, NotificationLevel, PollAnswerInfo,
+        PollInfo, PresenceStatus, ReactionEmoji, ReactionUserInfo, ReactionUsersInfo,
+        VoiceConnectionStatus,
     },
     tui::state::{ChannelPaneEntry, DashboardState, FocusPane, GuildPaneEntry, MessageActionKind},
 };

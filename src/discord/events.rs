@@ -110,6 +110,11 @@ pub enum AppEvent {
         before: Option<Id<MessageMarker>>,
         messages: Vec<MessageInfo>,
     },
+    MessageHistoryAroundLoaded {
+        channel_id: Id<ChannelMarker>,
+        message_id: Id<MessageMarker>,
+        messages: Vec<MessageInfo>,
+    },
     ThreadPreviewLoaded {
         channel_id: Id<ChannelMarker>,
         message: MessageInfo,
@@ -467,6 +472,7 @@ impl AppEvent {
             AppEvent::ChannelUpsert(channel) => channel_upsert_needs_effect_delivery(channel),
             AppEvent::MessageCreate { .. }
             | AppEvent::MessageHistoryLoaded { .. }
+            | AppEvent::MessageHistoryAroundLoaded { .. }
             | AppEvent::MessageHistoryLoadFailed { .. }
             | AppEvent::ThreadPreviewLoaded { .. }
             | AppEvent::ThreadPreviewLoadFailed { .. }

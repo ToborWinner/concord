@@ -32,6 +32,7 @@ fn message_action_items_reflect_selected_message_capabilities() {
             MessageActionKind::Edit,
             MessageActionKind::OpenUrl,
             MessageActionKind::ViewAttachment,
+            MessageActionKind::GoToReferencedMessage,
             MessageActionKind::ShowProfile,
             MessageActionKind::OpenPinConfirmation,
             MessageActionKind::OpenThread,
@@ -41,7 +42,12 @@ fn message_action_items_reflect_selected_message_capabilities() {
     );
     assert!(message_action(&actions, MessageActionKind::CopyContent).enabled);
     assert!(message_action(&actions, MessageActionKind::Reply).enabled);
+    assert_eq!(
+        message_action(&actions, MessageActionKind::ShowProfile).label,
+        "show message sender profile"
+    );
     assert!(message_action(&actions, MessageActionKind::ShowProfile).enabled);
+    assert!(!message_action(&actions, MessageActionKind::GoToReferencedMessage).enabled);
     assert!(!message_action(&actions, MessageActionKind::OpenThread).enabled);
     assert!(!message_action(&actions, MessageActionKind::ShowReactionUsers).enabled);
     assert!(!message_action(&actions, MessageActionKind::OpenPollVotePicker).enabled);

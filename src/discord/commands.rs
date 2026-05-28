@@ -164,6 +164,10 @@ pub enum AppCommand {
         channel_id: Id<ChannelMarker>,
         before: Option<Id<MessageMarker>>,
     },
+    LoadMessageHistoryAround {
+        channel_id: Id<ChannelMarker>,
+        message_id: Id<MessageMarker>,
+    },
     LoadThreadPreview {
         channel_id: Id<ChannelMarker>,
         message_id: Id<MessageMarker>,

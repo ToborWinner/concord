@@ -1,13 +1,23 @@
+use crate::discord::ids::{
+    Id,
+    marker::{ChannelMarker, MessageMarker},
+};
 use crate::discord::{EmbedInfo, MessageState, ReactionEmoji};
 use crate::tui::format::detected_urls;
 use crate::tui::keybindings::KeyChord;
 
 use super::super::{
-    DashboardState, FocusPane, MessageActionItem, MessageActionKind, MessageActionMenuState,
-    MessageUrlItem, MessageUrlPickerState, popups,
+    ActiveGuildScope, DashboardState, FocusPane, MessageActionItem, MessageActionKind,
+    MessageActionMenuState, MessageUrlItem, MessageUrlPickerState, popups,
 };
 use crate::discord::AppCommand;
 use crate::tui::state::popups::{ActiveModalPopupKind, LeaderActionState, ModalPopup};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct ReferencedMessageTarget {
+    pub(super) channel_id: Id<ChannelMarker>,
+    pub(super) message_id: Id<MessageMarker>,
+}
 
 impl DashboardState {
     pub fn activate_selected_message_pane_item(&mut self) -> Option<AppCommand> {
@@ -108,8 +118,13 @@ impl DashboardState {
                 enabled: message.attachments_in_display_order().next().is_some(),
             },
             MessageActionItem {
+                kind: MessageActionKind::GoToReferencedMessage,
+                label: "go to referenced message".to_owned(),
+                enabled: self.referenced_message_target(message).is_some(),
+            },
+            MessageActionItem {
                 kind: MessageActionKind::ShowProfile,
-                label: "show profile".to_owned(),
+                label: "show message sender profile".to_owned(),
                 enabled: true,
             },
             MessageActionItem {
@@ -267,6 +282,25 @@ impl DashboardState {
         self.discord.cache.can_pin_messages_in_channel(channel)
     }
 
+    fn referenced_message_target(&self, message: &MessageState) -> Option<ReferencedMessageTarget> {
+        let reference = message.reference.as_ref()?;
+        let message_id = reference.message_id?;
+        let channel_id = reference.channel_id.unwrap_or(message.channel_id);
+        let channel = self.discord.cache.channel(channel_id)?;
+        if !self.discord.cache.can_view_channel(channel)
+            || !self
+                .discord
+                .cache
+                .can_read_message_history_in_channel(channel)
+        {
+            return None;
+        }
+        Some(ReferencedMessageTarget {
+            channel_id,
+            message_id,
+        })
+    }
+
     pub fn activate_message_action_shortcut(&mut self, shortcut: KeyChord) -> Option<AppCommand> {
         let actions = self.selected_message_action_items();
         let index = self.options.key_bindings().matching_action_shortcut_index(
@@ -357,6 +391,7 @@ impl DashboardState {
                 self.open_poll_vote_picker();
                 None
             }
+            MessageActionKind::GoToReferencedMessage => self.go_to_selected_referenced_message(),
         }
     }
 
@@ -436,6 +471,27 @@ impl DashboardState {
                 None
             }
         }
+    }
+
+    pub fn go_to_selected_referenced_message(&mut self) -> Option<AppCommand> {
+        let target = self
+            .selected_message_state()
+            .and_then(|message| self.referenced_message_target(message))?;
+        let scope = self
+            .discord
+            .cache
+            .channel(target.channel_id)
+            .map(|channel| match channel.guild_id {
+                Some(guild_id) => ActiveGuildScope::Guild(guild_id),
+                None => ActiveGuildScope::DirectMessages,
+            })?;
+        self.activate_guild(scope);
+        self.activate_channel(target.channel_id);
+        self.focus_pane(FocusPane::Messages);
+        Some(AppCommand::LoadMessageHistoryAround {
+            channel_id: target.channel_id,
+            message_id: target.message_id,
+        })
     }
 
     pub fn direct_show_selected_message_profile(&mut self) -> Option<AppCommand> {

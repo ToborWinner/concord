@@ -345,9 +345,9 @@ fn message_action_menu_marks_selected_and_disabled_actions() {
     assert_eq!(
         line_texts_from_ratatui(&lines),
         vec![
-            "  [t] open thread",
-            "› [u] show reacted users (unavailable)",
-            "  [c] choose poll votes",
+            "  [1] open thread",
+            "› [2] show reacted users (unavailable)",
+            "  [3] choose poll votes",
         ]
     );
 }

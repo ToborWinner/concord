@@ -680,6 +680,7 @@ impl UiAction {
             UiAction::OpenThread => "OpenThread",
             UiAction::ShowReactionUsers => "ShowReactionUsers",
             UiAction::OpenPollVotePicker => "OpenPollVotePicker",
+            UiAction::GoToReferencedMessage => "GoToReferencedMessage",
             UiAction::ToggleGuildPane => "ToggleGuildPane",
             UiAction::ToggleChannelPane => "ToggleChannelPane",
             UiAction::ToggleMemberPane => "ToggleMemberPane",
@@ -725,11 +726,12 @@ impl UiAction {
             UiAction::EditMessage => "edit message",
             UiAction::OpenMessageUrl => "open URL",
             UiAction::ViewMessageAttachment => "view attachment",
-            UiAction::ShowMessageProfile => "show profile",
+            UiAction::ShowMessageProfile => "show message sender profile",
             UiAction::PinMessage => "pin message",
             UiAction::OpenThread => "open thread",
             UiAction::ShowReactionUsers => "show reacted users",
             UiAction::OpenPollVotePicker => "choose poll votes",
+            UiAction::GoToReferencedMessage => "go to referenced message",
             UiAction::ToggleGuildPane => "toggle Servers",
             UiAction::ToggleChannelPane => "toggle Channels",
             UiAction::ToggleMemberPane => "toggle Members",
@@ -841,6 +843,7 @@ fn all_ui_actions() -> &'static [UiAction] {
         UiAction::OpenThread,
         UiAction::ShowReactionUsers,
         UiAction::OpenPollVotePicker,
+        UiAction::GoToReferencedMessage,
         UiAction::ToggleGuildPane,
         UiAction::ToggleChannelPane,
         UiAction::ToggleMemberPane,
@@ -895,7 +898,7 @@ fn default_keymap_specs(leader: KeyChord) -> BTreeMap<UiAction, KeyMapActionSpec
             UiAction::HalfPageUp => vec![vec![ctrl_chord('u')]],
             UiAction::ScrollMessageViewportDown => vec![vec![char_chord('J')]],
             UiAction::ScrollMessageViewportUp => vec![vec![char_chord('K')]],
-            UiAction::JumpTop => vec![vec![char_chord('g')]],
+            UiAction::JumpTop => vec![vec![char_chord('g'), char_chord('g')]],
             UiAction::JumpBottom => vec![vec![char_chord('G')]],
             UiAction::ScrollHorizontalLeft => vec![vec![char_chord('H')]],
             UiAction::ScrollHorizontalRight => vec![vec![char_chord('L')]],
@@ -915,11 +918,12 @@ fn default_keymap_specs(leader: KeyChord) -> BTreeMap<UiAction, KeyMapActionSpec
             UiAction::EditMessage => vec![vec![char_chord('e')]],
             UiAction::OpenMessageUrl => vec![vec![char_chord('o')]],
             UiAction::ViewMessageAttachment => vec![vec![char_chord('v')]],
-            UiAction::ShowMessageProfile => vec![vec![char_chord('p')]],
+            UiAction::ShowMessageProfile => vec![vec![char_chord('g'), char_chord('p')]],
             UiAction::PinMessage => vec![vec![char_chord('P')]],
-            UiAction::OpenThread => vec![vec![char_chord('t')]],
-            UiAction::ShowReactionUsers => vec![vec![char_chord('u')]],
-            UiAction::OpenPollVotePicker => vec![vec![char_chord('c')]],
+            UiAction::OpenThread => vec![vec![char_chord('g'), char_chord('t')]],
+            UiAction::ShowReactionUsers => vec![vec![char_chord('g'), char_chord('u')]],
+            UiAction::OpenPollVotePicker => vec![vec![char_chord('g'), char_chord('v')]],
+            UiAction::GoToReferencedMessage => vec![vec![char_chord('g'), char_chord('d')]],
             UiAction::ToggleGuildPane => vec![vec![leader, char_chord('1')]],
             UiAction::ToggleChannelPane => vec![vec![leader, char_chord('2')]],
             UiAction::ToggleMemberPane => vec![vec![leader, char_chord('4')]],
@@ -1186,6 +1190,64 @@ mod tests {
                 .iter()
                 .any(|item| item.key == "v" && item.label == "Voice" && item.has_children)
         );
+    }
+
+    #[test]
+    fn default_keymap_uses_g_prefix() {
+        let key_bindings = KeyBindings::default();
+        let prefix = [KeyChord::from_str("g").expect("g should parse")];
+
+        assert_eq!(
+            key_bindings
+                .keymap_lookup_root_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE)),
+            Some(KeyMapLookup::Pending)
+        );
+        assert_eq!(key_bindings.keymap_prefix_title(&prefix), "g");
+        assert_eq!(
+            key_bindings.keymap_lookup_with_key(
+                &prefix,
+                KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE)
+            ),
+            Some(KeyMapLookup::Action(UiAction::JumpTop))
+        );
+
+        let children = key_bindings.leader_keymap_children(&prefix);
+        assert!(
+            children
+                .iter()
+                .any(|item| item.key == "p" && item.label == "show message sender profile")
+        );
+        assert!(
+            children
+                .iter()
+                .any(|item| item.key == "t" && item.label == "open thread")
+        );
+        assert!(
+            children
+                .iter()
+                .any(|item| item.key == "u" && item.label == "show reacted users")
+        );
+        assert!(
+            children
+                .iter()
+                .any(|item| item.key == "v" && item.label == "choose poll votes")
+        );
+        assert!(
+            children
+                .iter()
+                .any(|item| item.key == "d" && item.label == "go to referenced message")
+        );
+
+        for legacy_key in ['p', 't', 'u', 'c'] {
+            assert_eq!(
+                key_bindings.keymap_lookup_direct_key(KeyEvent::new(
+                    KeyCode::Char(legacy_key),
+                    KeyModifiers::NONE
+                )),
+                None,
+                "{legacy_key} should not keep a legacy direct message action binding"
+            );
+        }
     }
 
     #[test]
@@ -1973,6 +2035,10 @@ mod tests {
             (
                 UiAction::OpenPollVotePicker,
                 MessageActionKind::OpenPollVotePicker,
+            ),
+            (
+                UiAction::GoToReferencedMessage,
+                MessageActionKind::GoToReferencedMessage,
             ),
         ];
 

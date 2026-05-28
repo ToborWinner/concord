@@ -961,6 +961,17 @@ impl DiscordClient {
             .await
     }
 
+    pub async fn load_message_history_around(
+        &self,
+        channel_id: Id<ChannelMarker>,
+        message_id: Id<MessageMarker>,
+        limit: u16,
+    ) -> Result<Vec<MessageInfo>> {
+        self.rest
+            .load_message_history_around(channel_id, message_id, limit)
+            .await
+    }
+
     pub async fn load_forum_posts(
         &self,
         guild_id: Id<GuildMarker>,

@@ -38,6 +38,7 @@ pub(in crate::tui) enum UiAction {
     OpenThread,
     ShowReactionUsers,
     OpenPollVotePicker,
+    GoToReferencedMessage,
     ToggleGuildPane,
     ToggleChannelPane,
     ToggleMemberPane,
@@ -300,6 +301,7 @@ impl MessageActionKind {
             MessageActionKind::OpenThread => UiAction::OpenThread,
             MessageActionKind::ShowReactionUsers => UiAction::ShowReactionUsers,
             MessageActionKind::OpenPollVotePicker => UiAction::OpenPollVotePicker,
+            MessageActionKind::GoToReferencedMessage => UiAction::GoToReferencedMessage,
         }
     }
 }

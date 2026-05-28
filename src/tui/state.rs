@@ -371,6 +371,14 @@ impl DashboardState {
             self.messages.new_messages_marker_message_id =
                 active_new_message.map(|(_, message_id)| message_id);
         }
+        if let AppEvent::MessageHistoryAroundLoaded {
+            channel_id,
+            message_id,
+            ..
+        } = &event
+        {
+            self.select_loaded_referenced_message(*channel_id, *message_id);
+        }
         self.clamp_list_viewports();
         self.clamp_message_viewport();
         if !should_scroll {

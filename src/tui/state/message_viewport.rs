@@ -1147,9 +1147,10 @@ impl DashboardState {
     }
 
     fn channel_messages(&self) -> Vec<&MessageState> {
-        self.selected_channel_id()
-            .map(|channel_id| self.discord.cache.messages_for_channel(channel_id))
-            .unwrap_or_default()
+        let Some(channel_id) = self.selected_channel_id() else {
+            return Vec::new();
+        };
+        self.discord.cache.messages_for_channel(channel_id)
     }
 
     pub fn enter_pinned_message_view(&mut self, channel_id: Id<ChannelMarker>) {
@@ -1249,6 +1250,32 @@ impl DashboardState {
             channel_id,
             before: Some(before),
         })
+    }
+
+    pub(super) fn select_loaded_referenced_message(
+        &mut self,
+        channel_id: Id<ChannelMarker>,
+        message_id: Id<MessageMarker>,
+    ) {
+        if self.selected_channel_id() != Some(channel_id) {
+            return;
+        }
+        self.select_message_by_id(message_id);
+    }
+
+    fn select_message_by_id(&mut self, message_id: Id<MessageMarker>) -> bool {
+        let Some(index) = self
+            .messages()
+            .iter()
+            .position(|message| message.id == message_id)
+        else {
+            return false;
+        };
+        self.messages.selected_message = index;
+        self.messages.message_keep_selection_visible = true;
+        self.messages.message_auto_follow = false;
+        self.clamp_message_viewport();
+        true
     }
 
     fn older_history_cursor(&self) -> Option<Id<MessageMarker>> {

@@ -150,7 +150,8 @@ impl DashboardState {
     }
 
     pub fn selected_message_history_channel_id(&self) -> Option<Id<ChannelMarker>> {
-        (!self.selected_channel_is_forum()).then_some(self.selected_channel_id()?)
+        let channel_id = self.selected_channel_id()?;
+        (!self.selected_channel_is_forum()).then_some(channel_id)
     }
 
     pub fn selected_message_history_needs_reload(&self) -> bool {

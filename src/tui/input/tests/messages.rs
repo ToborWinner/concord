@@ -41,6 +41,7 @@ fn message_top_scroll_emits_older_history_target() {
     state.focus_pane(FocusPane::Messages);
 
     handle_key(&mut state, char_key('g'));
+    handle_key(&mut state, char_key('g'));
     let command = handle_key(&mut state, key(KeyCode::Up));
 
     assert_eq!(
@@ -203,6 +204,7 @@ fn message_action_menu_selection_aliases_move_disabled_selection() {
 fn esc_returns_from_message_opened_thread() {
     let mut state = state_with_thread_created_message();
     state.focus_pane(FocusPane::Messages);
+    handle_key(&mut state, char_key('g'));
     handle_key(&mut state, char_key('t'));
     assert_eq!(state.selected_channel_id(), Some(Id::new(10)));
 
@@ -435,6 +437,7 @@ fn message_pane_profile_shortcut_opens_author_profile() {
     let mut state = state_with_messages(1);
     state.focus_pane(FocusPane::Messages);
 
+    handle_key(&mut state, char_key('g'));
     let command = handle_key(&mut state, char_key('p'));
 
     assert_eq!(
@@ -445,6 +448,99 @@ fn message_pane_profile_shortcut_opens_author_profile() {
         })
     );
     assert!(state.is_active_modal_popup(crate::tui::state::ActiveModalPopupKind::UserProfile));
+}
+
+#[test]
+fn goto_referenced_message_shortcut_merges_target_window_into_normal_messages() {
+    let mut state = state_with_messages(0);
+    state.push_event(message_create_event(MessageCreateFixture {
+        guild_id: Some(Id::new(1)),
+        channel_id: Id::new(2),
+        message_id: Id::new(10),
+        reference: Some(MessageReferenceInfo {
+            guild_id: Some(Id::new(1)),
+            channel_id: Some(Id::new(2)),
+            message_id: Some(Id::new(5)),
+        }),
+        ..guild_message_create_fixture()
+    }));
+    state.focus_pane(FocusPane::Messages);
+
+    handle_key(&mut state, char_key('g'));
+    let command = handle_key(&mut state, char_key('d'));
+
+    assert_eq!(
+        command,
+        Some(AppCommand::LoadMessageHistoryAround {
+            channel_id: Id::new(2),
+            message_id: Id::new(5),
+        })
+    );
+
+    state.push_event(AppEvent::MessageHistoryAroundLoaded {
+        channel_id: Id::new(2),
+        message_id: Id::new(5),
+        messages: vec![
+            MessageInfo::test(Id::new(2), Id::new(4)),
+            MessageInfo::test(Id::new(2), Id::new(5)),
+            MessageInfo::test(Id::new(2), Id::new(6)),
+        ],
+    });
+
+    assert_eq!(state.messages()[state.selected_message()].id, Id::new(5));
+    assert_eq!(
+        state
+            .messages()
+            .into_iter()
+            .map(|message| message.id.get())
+            .collect::<Vec<_>>(),
+        vec![4, 5, 6, 10]
+    );
+
+    assert_eq!(handle_key(&mut state, char_key('j')), None);
+    assert_eq!(state.messages()[state.selected_message()].id, Id::new(6));
+
+    state.push_event(message_create_event(MessageCreateFixture {
+        guild_id: Some(Id::new(1)),
+        channel_id: Id::new(2),
+        message_id: Id::new(11),
+        ..guild_message_create_fixture()
+    }));
+    assert_eq!(
+        state
+            .messages()
+            .into_iter()
+            .map(|message| message.id.get())
+            .collect::<Vec<_>>(),
+        vec![4, 5, 6, 10, 11]
+    );
+
+    assert_eq!(handle_key(&mut state, char_key('G')), None);
+    assert_eq!(state.messages()[state.selected_message()].id, Id::new(11));
+}
+
+#[test]
+fn goto_referenced_message_shortcut_noops_for_unknown_forward_channel() {
+    let mut state = state_with_messages(0);
+    state.push_event(message_create_event(MessageCreateFixture {
+        guild_id: Some(Id::new(1)),
+        channel_id: Id::new(2),
+        message_id: Id::new(10),
+        reference: Some(MessageReferenceInfo {
+            guild_id: Some(Id::new(9)),
+            channel_id: Some(Id::new(999)),
+            message_id: Some(Id::new(50)),
+        }),
+        forwarded_snapshots: vec![MessageSnapshotInfo::test()],
+        ..guild_message_create_fixture()
+    }));
+    state.focus_pane(FocusPane::Messages);
+
+    handle_key(&mut state, char_key('g'));
+    let command = handle_key(&mut state, char_key('d'));
+
+    assert_eq!(command, None);
+    assert_eq!(state.selected_channel_id(), Some(Id::new(2)));
 }
 
 #[test]
@@ -625,8 +721,8 @@ fn reaction_users_popup_is_modal_and_escape_closes_it() {
 fn poll_picker_number_shortcut_toggles_answer() {
     let mut state = state_with_multiselect_poll();
     state.focus_pane(FocusPane::Messages);
-    handle_key(&mut state, key(KeyCode::Enter));
-    handle_key(&mut state, char_key('c'));
+    handle_key(&mut state, char_key('g'));
+    handle_key(&mut state, char_key('v'));
 
     handle_key(&mut state, char_key('2'));
     let command = handle_key(&mut state, key(KeyCode::Enter));
@@ -645,8 +741,8 @@ fn poll_picker_number_shortcut_toggles_answer() {
 fn poll_picker_selection_aliases_move_selection() {
     let mut state = state_with_multiselect_poll();
     state.focus_pane(FocusPane::Messages);
-    handle_key(&mut state, key(KeyCode::Enter));
-    handle_key(&mut state, char_key('c'));
+    handle_key(&mut state, char_key('g'));
+    handle_key(&mut state, char_key('v'));
 
     assert!(state.is_active_modal_popup(crate::tui::state::ActiveModalPopupKind::PollVotePicker));
 

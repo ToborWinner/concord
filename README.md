@@ -254,7 +254,7 @@ With default vim-style navigation:
 | `J`, `K` / `H`, `L`                       | Scroll viewport                            |
 | `Ctrl+d` / `Ctrl+u`                       | Half-page scroll                           |
 | `Alt+h/l/←/→`                             | Resize focused pane width                  |
-| `g` / `G`                                 | Jump or scroll to top / bottom             |
+| `gg` / `G`                                | Jump or scroll to top / bottom             |
 | `Enter`                                   | Open or activate the selected item         |
 | `/`                                       | Filter the focused Guilds or Channels pane |
 | `Space`                                   | Open leader shortcut window                |
@@ -298,7 +298,6 @@ Message shortcuts:
 | `e`      | Edit                | Start editing the selected message when editing is allowed  |
 | `o`      | Open URL            | Open the selected message URL, or choose from multiple URLs |
 | `v`      | View attachment     | Open the selected message's attachment viewer               |
-| `p`      | Profile             | Open the selected message author's profile                  |
 | `P`      | Pin / unpin         | Open a pin or unpin confirmation for the selected message   |
 
 If a message contains more than one detected URL, `o` opens a numbered URL picker inside the leader popup so you can choose which link to open.
@@ -329,6 +328,18 @@ Voice commands:
 | `Space`, `v`, `d` | Deafen voice | Toggle Concord's Discord voice deaf state |
 | `Space`, `v`, `m` | Mute voice   | Toggle Concord's Discord voice mute state |
 | `Space`, `v`, `l` | Leave voice  | Leave the current Concord voice channel   |
+
+`g` prefix commands:
+
+| Sequence | Action                                         |
+| -------- | ---------------------------------------------- |
+| `g`, `g` | Jump to the top                                |
+| `g`, `d` | Go to the replied or forwarded message         |
+| `g`, `p` | Open the selected message author's profile     |
+| `g`, `t` | Open the selected message's thread             |
+| `g`, `u` | Show users who reacted to the selected message |
+| `g`, `v` | Choose poll votes for the selected message     |
+| `g`, `p` | Show selected message sender profile           |
 
 When the attachment viewer is open, press `d` to download the current attachment directly.
 
@@ -471,7 +482,7 @@ Example `keymap.toml`:
 [keymap]
 StartComposer = { keys = ["c"] }
 ReplyMessage = "<leader>mr"
-OpenThread = { keys = ["t"], description = "open thread" }
+OpenThread = { keys = ["gt"], description = "open thread" }
 VoiceDeafen = "<leader>vd"
 VoiceMute = "<leader>vm"
 VoiceLeave = "<leader>vl"
@@ -563,7 +574,7 @@ Navigation and app actions:
 | `HalfPageUp`                | `"<C-u>"`                  | Half-page up.                            |
 | `ScrollMessageViewportDown` | `"J"`                      | Scroll the message viewport down.        |
 | `ScrollMessageViewportUp`   | `"K"`                      | Scroll the message viewport up.          |
-| `JumpTop`                   | `"g"`                      | Jump to the top.                         |
+| `JumpTop`                   | `"gg"`                     | Jump to the top.                         |
 | `JumpBottom`                | `"G"`                      | Jump to the bottom.                      |
 | `ScrollHorizontalLeft`      | `"H"`                      | Scroll focused pane horizontally left.   |
 | `ScrollHorizontalRight`     | `"L"`                      | Scroll focused pane horizontally right.  |
@@ -582,28 +593,29 @@ Message actions:
 | `EditMessage`           | `"e"`          | Start editing the selected message.             |
 | `OpenMessageUrl`        | `"o"`          | Open the selected message URL.                  |
 | `ViewMessageAttachment` | `"v"`          | Open the selected message attachment viewer.    |
-| `ShowMessageProfile`    | `"p"`          | Open the selected message author's profile.     |
+| `GoToReferencedMessage` | `"gd"`         | Go to the replied or forwarded message.         |
+| `ShowMessageProfile`    | `"gp"`         | Open the selected message author's profile.     |
 | `PinMessage`            | `"P"`          | Open pin or unpin confirmation.                 |
-| `OpenThread`            | `"t"`          | Open the selected message's thread.             |
-| `ShowReactionUsers`     | `"u"`          | Show users who reacted to the selected message. |
-| `OpenPollVotePicker`    | `"c"`          | Choose poll votes for the selected message.     |
+| `OpenThread`            | `"gt"`         | Open the selected message's thread.             |
+| `ShowReactionUsers`     | `"gu"`         | Show users who reacted to the selected message. |
+| `OpenPollVotePicker`    | `"gv"`         | Choose poll votes for the selected message.     |
 
 Pane, options, and voice actions:
 
-| Action name               | Default config                     | Action                                          |
-| ------------------------- | ---------------------------------- | ----------------------------------------------- |
-| `ToggleGuildPane`         | `"<leader>1"`                      | Toggle the Servers pane.                        |
-| `ToggleChannelPane`       | `"<leader>2"`                      | Toggle the Channels pane.                       |
-| `ToggleMemberPane`        | `"<leader>4"`                      | Toggle the Members pane.                        |
-| `OpenFocusedPaneAction`   | `"<leader>a"`                      | Open actions for the currently focused pane.    |
-| `OpenOptions`             | `"<leader>o"`                      | Open the options category picker.               |
-| `ChannelSwitcher`         | `"<leader><leader>"`               | Open channel switcher.                          |
-| `OpenDisplayOptions`      | Contextual `d` after `OpenOptions` | Open Display options.                           |
-| `OpenNotificationOptions` | Contextual `n` after `OpenOptions` | Open Notification options.                      |
-| `OpenVoiceOptions`        | Contextual `v` after `OpenOptions` | Open Voice options.                             |
-| `VoiceDeafen`             | `"<leader>vd"`                     | Toggle voice deafen.                            |
-| `VoiceMute`               | `"<leader>vm"`                     | Toggle voice mute.                              |
-| `VoiceLeave`              | `"<leader>vl"`                     | Leave the current Concord voice channel.        |
+| Action name               | Default config                     | Action                                       |
+| ------------------------- | ---------------------------------- | -------------------------------------------- |
+| `ToggleGuildPane`         | `"<leader>1"`                      | Toggle the Servers pane.                     |
+| `ToggleChannelPane`       | `"<leader>2"`                      | Toggle the Channels pane.                    |
+| `ToggleMemberPane`        | `"<leader>4"`                      | Toggle the Members pane.                     |
+| `OpenFocusedPaneAction`   | `"<leader>a"`                      | Open actions for the currently focused pane. |
+| `OpenOptions`             | `"<leader>o"`                      | Open the options category picker.            |
+| `ChannelSwitcher`         | `"<leader><leader>"`               | Open channel switcher.                       |
+| `OpenDisplayOptions`      | Contextual `d` after `OpenOptions` | Open Display options.                        |
+| `OpenNotificationOptions` | Contextual `n` after `OpenOptions` | Open Notification options.                   |
+| `OpenVoiceOptions`        | Contextual `v` after `OpenOptions` | Open Voice options.                          |
+| `VoiceDeafen`             | `"<leader>vd"`                     | Toggle voice deafen.                         |
+| `VoiceMute`               | `"<leader>vm"`                     | Toggle voice mute.                           |
+| `VoiceLeave`              | `"<leader>vl"`                     | Leave the current Concord voice channel.     |
 
 ##### Composer actions
 
@@ -719,7 +731,7 @@ HalfPageDown = "<C-d>"
 HalfPageUp = "<C-u>"
 ScrollMessageViewportDown = "J"
 ScrollMessageViewportUp = "K"
-JumpTop = "g"
+JumpTop = "gg"
 JumpBottom = "G"
 ScrollHorizontalLeft = "H"
 ScrollHorizontalRight = "L"
@@ -733,11 +745,12 @@ DeleteMessage = "d"
 EditMessage = "e"
 OpenMessageUrl = "o"
 ViewMessageAttachment = "v"
-ShowMessageProfile = "p"
+GoToReferencedMessage = "gd"
+ShowMessageProfile = "gp"
 PinMessage = "P"
-OpenThread = "t"
-ShowReactionUsers = "u"
-OpenPollVotePicker = "c"
+OpenThread = "gt"
+ShowReactionUsers = "gu"
+OpenPollVotePicker = "gv"
 ToggleGuildPane = "<leader>1"
 ToggleChannelPane = "<leader>2"
 ToggleMemberPane = "<leader>4"

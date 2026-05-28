@@ -67,6 +67,7 @@ pub enum MessageActionKind {
     OpenThread,
     ShowReactionUsers,
     OpenPollVotePicker,
+    GoToReferencedMessage,
 }
 
 // Message action will be removed.
