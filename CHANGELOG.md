@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.9] - 2026-06-03
+
+### Bug Fixes
+
+- Force image protocol refresh after popup overlay changes (#154) in [#154](https://github.com/chojs23/concord/pull/154) by @chojs23
+- Prevent half-page message scroll from skipping content (#155) in [#155](https://github.com/chojs23/concord/pull/155) by @chojs23
+
+### Documentation
+
+- Update readme by @chojs23
+
+### Features
+
+- Load newer message when message cache has gap (#153) in [#153](https://github.com/chojs23/concord/pull/153) by @chojs23
+- Reconnect (#156) in [#156](https://github.com/chojs23/concord/pull/156) by @chojs23
+
+### Refactor
+
+- Unify notification audio playback by @chojs23
+
 ## [2.1.8] - 2026-06-01
 
 ### Bug Fixes
@@ -632,17 +652,8 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Keep original image width:height ratio (#6) in [#6](https://github.com/chojs23/concord/pull/6) by @chojs23
-
-### Cd
-
-- Chain crates publish after release by @chojs23
-
-## [1.1.0] - 2026-05-09
-
-### Bug Fixes
-
 - _(flake)_ Use crane (#4) in [#4](https://github.com/chojs23/concord/pull/4) by @M4jor-Tom
+- Keep original image width:height ratio (#6) in [#6](https://github.com/chojs23/concord/pull/6) by @chojs23
 
 ### Documentation
 
@@ -657,6 +668,10 @@ All notable changes to this project will be documented in this file.
 ### Miscellaneous Tasks
 
 - Enable generated github release notes by @chojs23
+
+### Cd
+
+- Chain crates publish after release by @chojs23
 
 ### New Contributors
 
