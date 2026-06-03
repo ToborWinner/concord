@@ -54,7 +54,7 @@ brew install opus pkg-config
 cargo install concord
 ```
 
-To install without local voice playback and microphone support:
+To install without local voice playback, microphone support and syntax highlighting:
 
 ```sh
 cargo install concord --no-default-features
